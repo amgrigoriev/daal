@@ -29,6 +29,8 @@
 #include "kmeans_batch.h"
 #include "kmeans_distributed.h"
 #include "kmeans_lloyd_kernel.h"
+#include "oneapi/kmeans_lloyd_distr_step1_kernel_ucapi.h"
+#include "oneapi/kmeans_lloyd_distr_step2_kernel_ucapi.h"
 #include "oneapi/kmeans_dense_lloyd_batch_kernel_ucapi.h"
 #include "execution_context.h"
 
@@ -92,7 +94,17 @@ services::Status BatchContainer<algorithmFPType, method, cpu>::compute()
 template <typename algorithmFPType, Method method, CpuType cpu>
 DistributedContainer<step1Local, algorithmFPType, method, cpu>::DistributedContainer(daal::services::Environment::env * daalEnv)
 {
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
+
+    if (deviceInfo.isCpu)
+    {    
     __DAAL_INITIALIZE_KERNELS(internal::KMeansDistributedStep1Kernel, method, algorithmFPType);
+}
+    else
+    {
+        _kernel = new internal::KMeansDistributedStep1KernelUCAPI<algorithmFPType>();
+    }
 }
 
 template <typename algorithmFPType, Method method, CpuType cpu>
@@ -125,9 +137,20 @@ services::Status DistributedContainer<step1Local, algorithmFPType, method, cpu>:
         r[5] = static_cast<NumericTable *>(pres->get(partialAssignments).get());
     }
 
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
+
     daal::services::Environment::env & env = *_env;
 
+    if (deviceInfo.isCpu)
+    {    
     __DAAL_CALL_KERNEL(env, internal::KMeansDistributedStep1Kernel, __DAAL_KERNEL_ARGUMENTS(method, algorithmFPType), compute, na, a, nr, r, par);
+}
+    else
+    {
+        return ((internal::KMeansDistributedStep1KernelUCAPI<algorithmFPType> *)(_kernel))->compute(na, a, nr, r, par);
+    }
+
 }
 
 template <typename algorithmFPType, Method method, CpuType cpu>
@@ -146,15 +169,34 @@ services::Status DistributedContainer<step1Local, algorithmFPType, method, cpu>:
     r[0] = static_cast<NumericTable *>(res->get(assignments).get());
 
     daal::services::Environment::env & env = *_env;
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
 
+    if (deviceInfo.isCpu)
+    {
     __DAAL_CALL_KERNEL(env, internal::KMeansDistributedStep1Kernel, __DAAL_KERNEL_ARGUMENTS(method, algorithmFPType), finalizeCompute, na, a, nr, r,
                        par);
+}
+    else
+    {
+        return ((internal::KMeansDistributedStep1KernelUCAPI<algorithmFPType> *)(_kernel))->finalizeCompute(na, a, nr, r, par);
+    }
 }
 
 template <typename algorithmFPType, Method method, CpuType cpu>
 DistributedContainer<step2Master, algorithmFPType, method, cpu>::DistributedContainer(daal::services::Environment::env * daalEnv)
 {
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
+
+    if (deviceInfo.isCpu)
+    {
     __DAAL_INITIALIZE_KERNELS(internal::KMeansDistributedStep2Kernel, method, algorithmFPType);
+}
+    else
+    {
+        _kernel = new internal::KMeansDistributedStep2KernelUCAPI<algorithmFPType>();
+    }
 }
 
 template <typename algorithmFPType, Method method, CpuType cpu>
@@ -196,9 +238,20 @@ services::Status DistributedContainer<step2Master, algorithmFPType, method, cpu>
 
     Parameter * par                        = static_cast<Parameter *>(_par);
     daal::services::Environment::env & env = *_env;
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
 
-    services::Status s = __DAAL_CALL_KERNEL_STATUS(env, internal::KMeansDistributedStep2Kernel, __DAAL_KERNEL_ARGUMENTS(method, algorithmFPType),
+    services::Status s;
+
+    if (deviceInfo.isCpu)
+    {
+        s = __DAAL_CALL_KERNEL_STATUS(env, internal::KMeansDistributedStep2Kernel, __DAAL_KERNEL_ARGUMENTS(method, algorithmFPType),
                                                    compute, na, a, nr, r, par);
+    }
+    else
+    {
+        s = ((internal::KMeansDistributedStep2KernelUCAPI<algorithmFPType> *)(_kernel))->compute(na, a, nr, r, par);
+    }                                                   
 
     dcInput->clear();
     return s;
@@ -225,9 +278,19 @@ services::Status DistributedContainer<step2Master, algorithmFPType, method, cpu>
 
     Parameter * par                        = static_cast<Parameter *>(_par);
     daal::services::Environment::env & env = *_env;
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
 
+    if (deviceInfo.isCpu)
+    {
     __DAAL_CALL_KERNEL(env, internal::KMeansDistributedStep2Kernel, __DAAL_KERNEL_ARGUMENTS(method, algorithmFPType), finalizeCompute, na, a, nr, r,
                        par);
+    }
+    else
+    {
+        return ((internal::KMeansDistributedStep2KernelUCAPI<algorithmFPType> *)(_kernel))->finalizeCompute(na, a, nr, r, par);
+    }
+
 }
 
 } // namespace kmeans

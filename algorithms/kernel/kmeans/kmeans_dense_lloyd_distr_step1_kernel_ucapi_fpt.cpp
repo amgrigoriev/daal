@@ -1,6 +1,6 @@
-/* file: kmeans_dense_lloyd_distr_step1_fpt_dispatcher.cpp */
+/* file: kmeans_dense_lloyd_batch_kernel_ucapi_fpt.cpp */
 /*******************************************************************************
-* Copyright 2014-2020 Intel Corporation
+* Copyright 2014-2019 Intel Corporation
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -17,17 +17,23 @@
 
 /*
 //++
-//  Implementation of K-means algorithm container -- a class that contains
-//  Lloyd K-means kernels for supported architectures.
+//  Implementation of K-means Distr Step1 Kernel for GPU.
 //--
 */
 
-#include "kmeans_container.h"
+#include "oneapi/kmeans_lloyd_distr_step1_kernel_ucapi.h"
+#include "oneapi/kmeans_lloyd_distr_step1_ucapi_impl.i"
 
 namespace daal
 {
 namespace algorithms
 {
-__DAAL_INSTANTIATE_DISPATCH_CONTAINER_SYCL(kmeans::DistributedContainer, distributed, step1Local, DAAL_FPTYPE, kmeans::lloydDense)
+namespace kmeans
+{
+namespace internal
+{
+template class KMeansDistributedStep1KernelUCAPI<DAAL_FPTYPE>;
+} // namespace internal
+} // namespace kmeans
 } // namespace algorithms
 } // namespace daal
