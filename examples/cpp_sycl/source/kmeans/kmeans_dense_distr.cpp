@@ -39,6 +39,7 @@ typedef float algorithmFPType; /* Algorithm floating-point type */
 const size_t nClusters       = 20;
 const size_t nIterations     = 1;
 const size_t nBlocks         = 4;
+const size_t nFeatures         = 19;
 const size_t nVectorsInBlock = 2500;
 
 const string dataFileNames[] = { "../data/distributed/kmeans_dense_1.csv", "../data/distributed/kmeans_dense_2.csv",
@@ -71,13 +72,14 @@ int main(int argc, char * argv[])
             FileDataSource<CSVFeatureManager> dataSource(dataFileNames[i], DataSource::doAllocateNumericTable, DataSource::doDictionaryFromContext);
 
             /* Retrieve the data from the input file */
-            dataSource.loadDataBlock();
-            data[i] = dataSource.getNumericTable();
+            NumericTablePtr testData = SyclHomogenNumericTable<>::create(nFeatures, 0, NumericTable::doNotAllocate);
+            dataSource.loadDataBlock(testData.get());
+            data[i] = testData;
 
             /* Create an algorithm object for the K-Means algorithm */
             kmeans::init::Distributed<step1Local, algorithmFPType, kmeans::init::randomDense> localInit(nClusters, nBlocks * nVectorsInBlock, i * nVectorsInBlock);
 
-            localInit.input.set(kmeans::init::data, data[i]);
+            localInit.input.set(kmeans::init::data, testData/* data[i]*/);
             localInit.compute();
             masterInit.input.add(kmeans::init::partialResults, localInit.getPartialResult());
         }

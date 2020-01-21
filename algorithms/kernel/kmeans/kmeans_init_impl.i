@@ -208,6 +208,17 @@ Status initDistrRandom(const NumericTable * pData, const Parameter * par, size_t
     DAAL_CHECK_BLOCK_STATUS(resBD);
 
     auto aClusters = resBD.get();
+
+    BlockDescriptor<algorithmFPType> inDataRows;
+    const_cast<NumericTable *>(pData)->getBlockOfRows(0, pData->getNumberOfRows(), readOnly, inDataRows);
+    auto inData = inDataRows.getBuffer().toHost(ReadWriteMode::readOnly);
+
+    for (size_t i = 0; i < nClustersFound; ++i)
+    {
+        for (size_t j = 0; j < p; j++) aClusters[i * p + j] = inData.get()[clusters.get()[i] * p + j];
+    }
+    return s;
+/*
     ReadRows<algorithmFPType, cpu> dataBD;
     for (size_t i = 0; i < nClustersFound; ++i)
     {
@@ -216,6 +227,7 @@ Status initDistrRandom(const NumericTable * pData, const Parameter * par, size_t
         for (size_t j = 0; j < p; j++) aClusters[i * p + j] = pRow[j];
     }
     return s;
+*/    
 }
 
 template <typename algorithmFPType, CpuType cpu>
@@ -267,6 +279,7 @@ services::Status KMeansInitStep1LocalKernel<method, algorithmFPType, cpu>::compu
     else
         DAAL_ASSERT(false && "should never happen");
     if (!s) return s;
+
     WriteOnlyRows<int, cpu> npcBD(*pNumPartialClusters, 0, 1);
     DAAL_CHECK_BLOCK_STATUS(npcBD);
     DAAL_CHECK(nClustersFound <= services::internal::MaxVal<int>::get(), ErrorIncorrectNumberOfPartialClusters)
