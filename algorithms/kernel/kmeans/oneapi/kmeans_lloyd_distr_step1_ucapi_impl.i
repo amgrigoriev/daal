@@ -33,8 +33,6 @@
 
 #include "oneapi/kmeans_lloyd_distr_step1_kernel_ucapi.h"
 
-#include <iostream>
-
 DAAL_ITTNOTIFY_DOMAIN(kmeans.dense.lloyd.distr.step1.oneapi);
 
 using namespace daal::internal;
@@ -72,12 +70,6 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
     NumericTable * ntCValues      = const_cast<NumericTable *>(r[3]);
     NumericTable * ntCCentroids   = const_cast<NumericTable *>(r[4]);
     NumericTable * ntAssignments  = const_cast<NumericTable *>(r[5]);
-    if(!ntAssignments) 
-    {
-        std::cout << "Invalid table" << std::endl;
-        exit(0);
-    }
-
 
     const size_t nIter     = par->maxIterations;
     const size_t nRows     = ntData->getNumberOfRows();
@@ -123,7 +115,6 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
         DAAL_ITTNOTIFY_SCOPED_TASK(compute.buildProgram);
         kernel_factory.build(ExecutionTargetIds::device, cachekey.c_str(), kmeans_cl_kernels, build_options.c_str());
     }
-    std::cout << "#10" << std::endl;
     const size_t nPartialCentroids = 128;
     const size_t nValuesInBlock    = 1024 * 1024 * 1024 / sizeof(algorithmFPType);
     const size_t nMinRows          = 1;
@@ -158,8 +149,6 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
 
     size_t nPartNum = this->getCandidatePartNum(nClusters);
 
-    std::cout << "#20" << std::endl;
-
     auto assignments               = context.allocate(TypeIds::id<int>(), blockSize, &st);
     auto dataSq                    = context.allocate(TypeIds::id<algorithmFPType>(), blockSize, &st);
     auto centroidsSq               = context.allocate(TypeIds::id<algorithmFPType>(), nClusters, &st);
@@ -173,8 +162,6 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
     auto partialCentroidsCounters  = context.allocate(TypeIds::id<int>(), nPartialCentroids * nClusters, &st);
     DAAL_CHECK_STATUS_VAR(st);
 
-    std::cout << "#30" << std::endl;
-
     auto compute_squares = kernel_factory.getKernel(this->getComputeSquaresKernelName(nFeatures), &st);
     DAAL_CHECK_STATUS_VAR(st);
 
@@ -187,10 +174,8 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
     auto merge_partial_candidates   = kernel_factory.getKernel("merge_candidates", &st);
 
     size_t nBlocks = nRows / blockSize + int(nRows % blockSize != 0);
-    std::cout << "#40" << std::endl;
     for (size_t block = 0; block < nBlocks; block++)
     {
-        std::cout << "  block " << block << std::endl;
         size_t first = block * blockSize;
         size_t last  = first + blockSize;
 
@@ -200,58 +185,40 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
         }
 
         size_t curBlockSize = last - first;
-        std::cout << "#40.2" << std::endl;
         BlockDescriptor<algorithmFPType> dataRows;
         ntData->getBlockOfRows(first, curBlockSize, readOnly, dataRows);
         auto data = dataRows.getBuffer();
         
-        std::cout << "#41" << std::endl;
         this->computeSquares(context, compute_squares, inCentroids, centroidsSq, nClusters, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#42" << std::endl;
         this->initDistances(context, init_distances, centroidsSq, distances, curBlockSize, nClusters, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#43" << std::endl;
         this->computeDistances(context, data, inCentroids, distances, blockSize, nClusters, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#44" << std::endl;
         this->computeAssignments(context, compute_assignments, distances, assignments.template get<int>(), mindistances, curBlockSize, nClusters, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#45" << std::endl;
         this->computeSquares(context, compute_squares, data, dataSq, curBlockSize, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
         this->computePartialCandidates(context, compute_partial_candidates, assignments.template get<int>(), mindistances, dataSq, candidates, candidateDistances,
                                     partialCandidates, partialCandidateDistances, curBlockSize, nClusters, int(block == 0), &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#46" << std::endl;
         this->mergePartialCandidates(context, merge_partial_candidates, outCCentroids, outCValues, partialCandidates, partialCandidateDistances,
                                 nClusters, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        std::cout << "#47" << std::endl;
         this->partialReduceCentroids(context, partial_reduce_centroids, data, distances, assignments.template get<int>(), partialCentroids, partialCentroidsCounters,
                                 curBlockSize, nClusters, nFeatures, nPartialCentroids, int(block == 0), &st);
         DAAL_CHECK_STATUS_VAR(st);
 
-        std::cout << "#48" << std::endl;
         this->updateObjectiveFunction(context, update_objective_function, dataSq, distances, assignments.template get<int>(), outObjFunction, curBlockSize, nClusters,
                                 int(block == 0), &st);
         DAAL_CHECK_STATUS_VAR(st);
-        {
-            auto objFunc = outObjFunction.toHost(ReadWriteMode::readOnly);
-            std::cout << "ObjFunction: " << objFunc.get()[0];
-        }
 
-        std::cout << "#49" << std::endl;
         ntData->releaseBlockOfRows(dataRows);
         if (par->assignFlag) {
-            std::cout << "#40.1" << std::endl;
             BlockDescriptor<int> assignmentsRows;
-            std::cout << (long)ntAssignments << std::endl;
             st = ntAssignments->getBlockOfRows(0, nRows, writeOnly, assignmentsRows);
             DAAL_CHECK_STATUS_VAR(st);
-            std::cout << "#40.1.1" << std::endl;
             auto fassignments = assignmentsRows.getBuffer();
-            std::cout << "#50" << std::endl;
             context.copy(fassignments, first, assignments, 0, blockSize, &st);
             ntAssignments->releaseBlockOfRows(assignmentsRows);
         }
@@ -259,16 +226,10 @@ Status KMeansDistributedStep1KernelUCAPI<algorithmFPType>::compute(size_t na, co
     this->mergeReduceCentroids(context, merge_reduce_centroids, partialCentroids, partialCentroidsCounters, outCentroids, nClusters, nFeatures,
                             nPartialCentroids, &st);
     {
-        auto counters                     = partialCentroidsCounters.template get<int>().toHost(ReadWriteMode::readOnly);
-        for (int iCl = 0; iCl < nClusters; iCl++)
-            std::cout << "Counters: " << counters.get()[iCl] << std::endl;
-    }
-    {
         auto finalCounters = partialCentroidsCounters.template get<int>().toHost(ReadWriteMode::readOnly);
         auto outCCountersHost = outCCounters.toHost(ReadWriteMode::readOnly);
         for(int i = 0; i < nClusters; i++) {
             outCCountersHost.get()[i] = finalCounters.get()[i];
-            std::cout << "Assignment of counters: " << outCCountersHost.get()[i] << " " << finalCounters.get()[i] << std::endl;
         }
     }
     ntInCentroids->releaseBlockOfRows(inCentroidsRows);
