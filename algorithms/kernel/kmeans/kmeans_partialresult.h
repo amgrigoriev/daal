@@ -25,6 +25,7 @@
 #define __KMEANS_PARTIALRESULT_
 
 #include "algorithms/kmeans/kmeans_types.h"
+#include "data_management/data/numeric_table_sycl_homogen.h"
 
 using namespace daal::data_management;
 
@@ -44,28 +45,54 @@ template <typename algorithmFPType>
 DAAL_EXPORT services::Status PartialResult::allocate(const daal::algorithms::Input * input, const daal::algorithms::Parameter * parameter,
                                                      const int method)
 {
+    auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
+
     const Parameter * kmPar = static_cast<const Parameter *>(parameter);
 
     size_t nFeatures = static_cast<const InputIface *>(input)->getNumberOfFeatures();
     size_t nClusters = kmPar->nClusters;
 
     services::Status status;
-    set(nObservations, HomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
-    DAAL_CHECK_STATUS_VAR(status);
-    set(partialSums, HomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
-    DAAL_CHECK_STATUS_VAR(status);
-    set(partialObjectiveFunction, HomogenNumericTable<algorithmFPType>::create(1, 1, NumericTable::doAllocate, &status));
-    DAAL_CHECK_STATUS_VAR(status);
-    set(partialCandidatesDistances, HomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
-    DAAL_CHECK_STATUS_VAR(status);
-    set(partialCandidatesCentroids, HomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
-    DAAL_CHECK_STATUS_VAR(status);
+    if (deviceInfo.isCpu)
+    {
+        set(nObservations, HomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialSums, HomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialObjectiveFunction, HomogenNumericTable<algorithmFPType>::create(1, 1, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialCandidatesDistances, HomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialCandidatesCentroids, HomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+    } 
+    else 
+    {
+        set(nObservations, SyclHomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialSums, SyclHomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialObjectiveFunction, SyclHomogenNumericTable<algorithmFPType>::create(1, 1, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialCandidatesDistances, SyclHomogenNumericTable<algorithmFPType>::create(1, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+        set(partialCandidatesCentroids, SyclHomogenNumericTable<algorithmFPType>::create(nFeatures, nClusters, NumericTable::doAllocate, &status));
+        DAAL_CHECK_STATUS_VAR(status);
+    }
 
     const Input * step1Input = dynamic_cast<const Input *>(input);
     if (kmPar->assignFlag && step1Input)
     {
         const size_t nRows = step1Input->get(data)->getNumberOfRows();
-        set(partialAssignments, HomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
+        if (deviceInfo.isCpu)
+        {
+            set(partialAssignments, HomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
+        }
+        else
+        {
+            set(partialAssignments, SyclHomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
+        }
     }
 
     return status;
