@@ -31,8 +31,6 @@
 #include "service_ittnotify.h"
 #include "service_numeric_table.h"
 
-#include <iostream>
-
 #include "oneapi/kmeans_lloyd_distr_step2_kernel_ucapi.h"
 
 DAAL_ITTNOTIFY_DOMAIN(kmeans.dense.lloyd.distr.step2.oneapi);
@@ -117,11 +115,6 @@ Status KMeansDistributedStep2KernelUCAPI<algorithmFPType>::compute(size_t na, co
         BlockDescriptor<int> ntParClusterS0Rows;
         const_cast<NumericTable *>(a[i * 5 + 0])->getBlockOfRows(0, nClusters, readOnly, ntParClusterS0Rows);
         auto inParClusterS0 = ntParClusterS0Rows.getBuffer();
-        {
-            auto dataout = inParClusterS0.toHost(ReadWriteMode::readOnly);
-            for(int j = 0; j < nClusters; j++)
-                std::cout << "Initial counters: " << dataout.get()[j] << std::endl;
-        }
 
         BlockDescriptor<algorithmFPType> ntParClusterS1Rows;
         const_cast<NumericTable *>(a[i * 5 + 1])->getBlockOfRows(0, nClusters, readOnly, ntParClusterS1Rows);
@@ -129,27 +122,10 @@ Status KMeansDistributedStep2KernelUCAPI<algorithmFPType>::compute(size_t na, co
 
         updateClusters(context, i == 0 ? initClustersKernel : updateClustersKernel, inParClusterS0, 
                        inParClusterS1, outCCounters, outCentroids, nClusters, nFeatures, &st); 
-        {
-            auto retCentroids = outCentroids.toHost(ReadWriteMode::readWrite);
-            std::cout << "Update Cluster #" << i << std::endl;
-            for(int j = 0; j < nClusters; j++) 
-            {
-                for(int k = 0; k < nFeatures; k++)
-                    std::cout << retCentroids.get()[j * nFeatures + k] << " ";
-                std::cout << std::endl;
-            }
-            std::cout << "  Counters" << std::endl;
-            auto retCCounters = outCCounters.toHost(ReadWriteMode::readOnly);
-            for(int j = 0; j < nClusters; j++) 
-            {
-                std::cout << "  " << retCCounters.get()[j] << std::endl;;
-            }
-        }
 
         BlockDescriptor<algorithmFPType> ntParObjFunctionRows;
         const_cast<NumericTable *>(a[i * 5 + 2])->getBlockOfRows(0, 1, readOnly, ntParObjFunctionRows);
         auto inParObjFunction = ntParObjFunctionRows.getBuffer().toHost(data_management::readOnly);
-        std::cout << "ParObjFunction: " << inParObjFunction.get()[0];
         tmpObjValue += inParObjFunction.get()[0];
 
         BlockDescriptor<algorithmFPType> ntParCValuesRows;
@@ -223,11 +199,9 @@ Status KMeansDistributedStep2KernelUCAPI<algorithmFPType>::finalizeCompute(size_
     *outTarget = *inTarget;
 
     size_t cPos = 0;
-    std::cout << "Finalize" << std::endl;
 
     for (size_t i = 0; i < nClusters; i++)
     {
-        std::cout << "Num: " << clusterS0[i] << std::endl;
         if (clusterS0[i] > 0)
         {
             algorithmFPType coeff = 1.0 / clusterS0[i];
@@ -235,9 +209,7 @@ Status KMeansDistributedStep2KernelUCAPI<algorithmFPType>::finalizeCompute(size_
             for (size_t j = 0; j < p; j++)
             {
                 clusters[i * p + j] = clusterS1[i * p + j] * coeff;
-                std::cout << clusters[i * p + j] << " ";
             }
-            std::cout << std::endl;
         }
         else
         {

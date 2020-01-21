@@ -56,7 +56,6 @@ __kernel void update_clusters_distr(  __global       int             *partialCen
     const int newN = cCounters[global_id];
     const algorithmFPType oldContrib = oldN * partialCentroids[global_id * P + local_id];
     const algorithmFPType newContrib = newN * centroids[global_id * P + local_id];
-    printf("index %d pos %d oldN %d newN %d oldCntr %f newCntr %f\n", global_id, local_id, oldN, newN, oldContrib, newContrib);
     centroids[global_id * P + local_id] = (oldContrib + newContrib) / (oldN + newN) ;
     if(local_id == 0)
         cCounters[global_id] = oldN + newN;
