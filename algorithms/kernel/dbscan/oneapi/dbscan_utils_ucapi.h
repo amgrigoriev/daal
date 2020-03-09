@@ -49,32 +49,23 @@ namespace dbscan
 {
 namespace internal
 {
-#define __DBSCAN_DEFAULT_QUEUE_SIZE        8
-#define __DBSCAN_DEFAULT_VECTOR_SIZE       8
-#define __DBSCAN_DEFAULT_NEIGHBORHOOD_SIZE 8
+#define __DBSCAN_DEFAULT_QUEUE_UCAPI_SIZE        2048
+#define __DBSCAN_DEFAULT_VECTOR_UCAPI_SIZE       2048
+#define __DBSCAN_DEFAULT_NEIGHBORHOOD_UCAPI_SIZE 2048
 
 template <typename T>
 class VectorUCAPI
 {
-    static const size_t defaultSize = __DBSCAN_DEFAULT_VECTOR_SIZE;
+    static const size_t defaultSize = __DBSCAN_DEFAULT_VECTOR_UCAPI_SIZE;
 
 public:
     DAAL_NEW_DELETE();
 
-    VectorUCAPI() : _data(nullptr), _size(0), _capacity(0) {
-        std::cout << "Default constructor" << std::endl;
-    }
+    VectorUCAPI() : _data(nullptr), _size(0), _capacity(0) {}
 
     VectorUCAPI(size_t capacity) : _size(0), _capacity(capacity)
     {
         _data = static_cast<T *>(services::internal::service_calloc<T, sse2>(_capacity * sizeof(T)));
-/*        if(_data == nullptr)
-            std::cout << "      allocatin failed" << std::endl;
-        else 
-            std::cout << "      allocatin passed" << std::endl;
-        *_data = 0;
-        _data[_size] = 0;
-        std::cout << "Check passed " << (long)_data << std::endl;*/
     }
 
     ~VectorUCAPI() { clear(); }
@@ -90,7 +81,6 @@ public:
 
     void clear()
     {
-//        std::cout << "Clear!!!!!!!!!!!!!!!!!!" << std::endl;
         if (_data)
         {
             services::daal_free(_data);
@@ -98,39 +88,30 @@ public:
         }
     }
 
-    void reset() { 
-//        std::cout << "Reset " <<  (long)_data << std::endl;
-        _size = 0; }
+    void reset() { _size = 0; }
 
     services::Status push_back(const T & value)
     {
-//        std::cout << "      push_back : " << _size << " " << _capacity << " " << (long)_data << std::endl;
         if (_size >= _capacity)
         {
-//            std::cout << "      will grow " << std::endl;
             services::Status status = grow();
             DAAL_CHECK_STATUS_VAR(status);
         }
-/*        _data[0] = value;
-        std::cout << "      pre-added" << std::endl;*/
         _data[_size] = value;
-//        std::cout << "      added" << std::endl;
         _size++;
-
-
         return services::Status();
     }
 
     inline T & operator[](size_t index) { return _data[index]; }
 
-    size_t size() const {  /*std::cout << "\n       size " <<  (long)_data << std::endl;*/ return _size; }
+    size_t size() const { return _size; }
 
     T * ptr() { return _data; }
 
 private:
     services::Status grow()
     {
-//        std::cout << "Grow" << std::endl;
+        std::cout << "VectorUCAPI grow: " << _capacity << std::endl;
         int result        = 0;
         _capacity         = (_capacity == 0 ? defaultSize : _capacity * 2);
         T * const newData = static_cast<T *>(services::internal::service_calloc<T, sse2>(_capacity * sizeof(T)));
@@ -154,7 +135,7 @@ private:
 template <typename T>
 class QueueUCAPI
 {
-    static const size_t defaultSize = __DBSCAN_DEFAULT_QUEUE_SIZE;
+    static const size_t defaultSize = __DBSCAN_DEFAULT_QUEUE_UCAPI_SIZE;
 
 public:
     DAAL_NEW_DELETE();
@@ -202,18 +183,16 @@ public:
 
         return (T)0;
     }
-    VectorUCAPI<T> popVector(size_t blockSize)
+    void popVector(size_t blockSize, VectorUCAPI<T>& vec)
     {
-        VectorUCAPI<T> ret;
         for(size_t i = 0; i < blockSize; i++) 
         {
             if(empty())
             {
                 break;
             }
-            ret.push_back(pop());
+            vec.push_back(pop());
         }
-        return ret;
     } 
 
     bool empty() const { return (_head == _tail); }
@@ -233,6 +212,7 @@ public:
 private:
     services::Status grow()
     {
+        std::cout << "QueueUCAPI grow: " << _capacity << std::endl;
         int result        = 0;
         _capacity         = (_capacity == 0 ? defaultSize : _capacity * 2);
         T * const newData = static_cast<T *>(services::internal::service_calloc<T, sse2>(_capacity * sizeof(T)));
@@ -259,7 +239,7 @@ private:
 template <typename FPType>
 class NeighborhoodUCAPI
 {
-    static const size_t defaultSize = __DBSCAN_DEFAULT_NEIGHBORHOOD_SIZE;
+    static const size_t defaultSize = __DBSCAN_DEFAULT_NEIGHBORHOOD_UCAPI_SIZE;
 
 public:
     DAAL_NEW_DELETE();
@@ -314,6 +294,7 @@ public:
 private:
     services::Status grow()
     {
+        std::cout << "QueueUCAPI grow: " << _capacity << std::endl;
         int result               = 0;
         _capacity                = (_capacity == 0 ? defaultSize : _capacity * 2);
         void * ptr               = services::daal_calloc(_capacity * sizeof(size_t));

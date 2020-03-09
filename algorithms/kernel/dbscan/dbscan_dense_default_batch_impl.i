@@ -27,6 +27,8 @@
 #include "dbscan_types.h"
 #include "dbscan_utils.h"
 
+#include <iostream>
+
 using namespace daal::internal;
 using namespace daal::services;
 using namespace daal::services::internal;
@@ -146,6 +148,7 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeNoMemSave(const N
     Status s;
 
     const algorithmFPType epsilon         = par->epsilon;
+    std::cout << epsilon << std::endl;
     const algorithmFPType minObservations = par->minObservations;
     const algorithmFPType minkowskiPower  = (algorithmFPType)2.0;
 
@@ -216,7 +219,7 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeNoMemSave(const N
     {
         DAAL_CHECK_STATUS_VAR(processResultsToCompute(par->resultsToCompute, isCore, ntData, ntCoreIndices, ntCoreObservations));
     }
-
+    std::cout << "Clusters: " << nClusters << std::endl;
     return s;
 }
 
@@ -229,6 +232,7 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeMemSave(const Num
     Status s;
 
     const algorithmFPType epsilon         = par->epsilon;
+    std::cout << epsilon << std::endl;
     const algorithmFPType minObservations = par->minObservations;
     const algorithmFPType minkowskiPower  = (algorithmFPType)2.0;
 
@@ -319,7 +323,7 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeMemSave(const Num
     {
         DAAL_CHECK_STATUS_VAR(processResultsToCompute(par->resultsToCompute, isCore, ntData, ntCoreIndices, ntCoreObservations));
     }
-
+    std::cout << "Clusters: " << nClusters << std::endl;
     return s;
 }
 

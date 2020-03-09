@@ -55,65 +55,74 @@ private:
 
     services::Status processResultsToCompute(DAAL_UINT64 resultsToCompute, int * const isCore, NumericTable * ntData,
                                              NumericTable * ntCoreIndices, NumericTable * ntCoreObservations);
-    services::Status query(
-                        NumericTable * ntData,
-                        oneapi::internal::UniversalBuffer& distances,
-                        oneapi::internal::UniversalBuffer& positions,
-                        oneapi::internal::UniversalBuffer& counters,
-                        size_t * indices, size_t n, size_t nRows, size_t dim, 
-                        algorithmFPType eps,
-                        int * const assignments,
-                        NeighborhoodUCAPI<algorithmFPType> * neighs, 
-                        bool doReset = false);
-    void fillRows(
-                        oneapi::internal::ExecutionContextIface& context,
-                        NumericTable * ntData,
-                        oneapi::internal::UniversalBuffer& nbrRows,
-                        size_t * indices, 
-                        size_t pos, 
-                        size_t number,
-                        size_t dim, 
-                        services::Status* status);
-    size_t getFreeIndices(
-                        size_t first, 
-                        size_t size, 
-                        size_t nRows,
-                        int * const assignments,
-                        VectorUCAPI<size_t>& data);
-    void initDistances(
-                        oneapi::internal::ExecutionContextIface& context,
-                        oneapi::internal::UniversalBuffer& querySq,
-                        oneapi::internal::UniversalBuffer& dataSq,
-                        oneapi::internal::UniversalBuffer& distances,
-                        uint32_t dataBlockSize,
-                        uint32_t probesBlockSize,
-                        services::Status* st);
-    void computeDistances(
-                        oneapi::internal::ExecutionContextIface& context,
-                        const services::Buffer<algorithmFPType>& data,
-                        const services::Buffer<algorithmFPType>& query,
-                        oneapi::internal::UniversalBuffer& distances,
-                        uint32_t dsize,
-                        uint32_t qsize,
-                        uint32_t nFeatures,
-                        services::Status* st);
-    void partition(
-                        oneapi::internal::ExecutionContextIface& context,
-                        oneapi::internal::UniversalBuffer& distances,
-                        oneapi::internal::UniversalBuffer& positions,
-                        oneapi::internal::UniversalBuffer& counters,
-                        uint32_t dsize,
-                        uint32_t qsize,
-                        algorithmFPType pivot,
-                        services::Status* st);
+    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::processRowNbrs(
+        const oneapi::internal::UniversalBuffer& rowDistances,
+        const oneapi::internal::UniversalBuffer& offsets,
+        uint32_t rowId,
+        uint32_t clusterId, 
+        uint32_t chunkOffset,
+        uint32_t numberOfChunks,
+        uint32_t nRows,
+        algorithmFPType eps,
+        oneapi::internal::UniversalBuffer& assignments,
+        oneapi::internal::UniversalBuffer& queue,
+        oneapi::internal::UniversalBuffer& queueEnd);
 
-    void buildProgram(
-                        oneapi::internal::ClKernelFactoryIface & kernel_factory, 
-                        services::Status * st);
+    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::countOffsets(
+        const oneapi::internal::UniversalBuffer& counters,
+        uint32_t numberOfChunks,
+        const oneapi::internal::UniversalBuffer& offsets);
 
-    size_t _queryBlockSize = 256;
-    size_t _dataBlockSize = 2048;
-    size_t _maxLocalSize = 16;
+    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValue(
+        oneapi::internal::UniversalBuffer& buffer,
+        uint32_t index,
+        int value); 
+ 
+    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValueByQueueIndex(
+        oneapi::internal::UniversalBuffer& buffer,
+        const oneapi::internal::UniversalBuffer& queue,
+        uint32_t posInQueue,
+        int value); 
+
+    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::queryRow(
+        const oneapi::internal::UniversalBuffer& data,
+        uint32_t nRows, 
+        uint32_t rowId,
+        uint32_t dim, 
+        uint32_t minkowskiPower,
+        oneapi::internal::UniversalBuffer& rowDistances);
+
+    Status DBSCANBatchKernelUCAPI<algorithmFPType>::queryQueueRows(
+        const oneapi::internal::UniversalBuffer& data,
+        uint32_t nRows, 
+        const oneapi::internal::UniversalBuffer& queue,
+        uint32_t queueBegin, 
+        uint32_t queueBlockSize,
+        uint32_t dim, 
+        uint32_t minkowskiPower,
+        oneapi::internal::UniversalBuffer& rowDistances);
+
+    size_t DBSCANBatchKernelUCAPI<algorithmFPType>::countNbrs(
+        const oneapi::internal::UniversalBuffer& assignments,
+        const oneapi::internal::UniversalBuffer& RowDistances,
+        size_t chunkOffset, 
+        size_t nRows,
+        size_t numberOfChunks,
+        algorithmFPType eps,
+        oneapi::internal::UniversalBuffer& counters,
+        oneapi::internal::UniversalBuffer& undefCounters);
+
+    uin32_t DBSCANBatchKernelUCAPI<algorithmFPType>::sumCounters(
+        const UniversalBuffer& counters,
+        uint32_t numberOfChunks);
+
+
+    services::Status buildProgram(
+        oneapi::internal::ClKernelFactoryIface & kernel_factory);
+
+    size_t _minSgSize = 16;
+    size_t _maxWgSize = 256;
+    size_t _chunkNumber = 64;
 };
 
 } // namespace internal

@@ -32,8 +32,6 @@
 #include "oneapi/dbscan_kernel_ucapi.h"
 #include "service_algo_utils.h"
 
-#include <iostream>
-
 namespace daal
 {
 namespace algorithms
@@ -97,7 +95,6 @@ services::Status BatchContainer<algorithmFPType, method, cpu>::compute()
     }
     else 
     {
-        std::cout << "Let's call UCAPI kernel" << std::endl;
         __DAAL_CALL_KERNEL_SYCL(env, internal::DBSCANBatchKernelUCAPI,                              \
                         __DAAL_KERNEL_ARGUMENTS(algorithmFPType), compute,                          \
                         ntData.get(), ntWeights.get(), ntAssignments.get(),                         \
