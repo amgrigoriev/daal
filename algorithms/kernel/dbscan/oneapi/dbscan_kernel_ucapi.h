@@ -55,7 +55,7 @@ private:
 
     services::Status processResultsToCompute(DAAL_UINT64 resultsToCompute, int * const isCore, NumericTable * ntData,
                                              NumericTable * ntCoreIndices, NumericTable * ntCoreObservations);
-    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::processRowNbrs(
+    services::Status processRowNbrs(
         const oneapi::internal::UniversalBuffer& rowDistances,
         const oneapi::internal::UniversalBuffer& offsets,
         uint32_t rowId,
@@ -68,23 +68,23 @@ private:
         oneapi::internal::UniversalBuffer& queue,
         oneapi::internal::UniversalBuffer& queueEnd);
 
-    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::countOffsets(
+    services::Status countOffsets(
         const oneapi::internal::UniversalBuffer& counters,
         uint32_t numberOfChunks,
         const oneapi::internal::UniversalBuffer& offsets);
 
-    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValue(
+    services::Status setBufferValue(
         oneapi::internal::UniversalBuffer& buffer,
         uint32_t index,
         int value); 
  
-    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValueByQueueIndex(
+    services::Status setBufferValueByQueueIndex(
         oneapi::internal::UniversalBuffer& buffer,
         const oneapi::internal::UniversalBuffer& queue,
         uint32_t posInQueue,
         int value); 
 
-    services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::queryRow(
+    services::Status queryRow(
         const oneapi::internal::UniversalBuffer& data,
         uint32_t nRows, 
         uint32_t rowId,
@@ -92,7 +92,7 @@ private:
         uint32_t minkowskiPower,
         oneapi::internal::UniversalBuffer& rowDistances);
 
-    Status DBSCANBatchKernelUCAPI<algorithmFPType>::queryQueueRows(
+    services::Status queryQueueRows(
         const oneapi::internal::UniversalBuffer& data,
         uint32_t nRows, 
         const oneapi::internal::UniversalBuffer& queue,
@@ -102,7 +102,7 @@ private:
         uint32_t minkowskiPower,
         oneapi::internal::UniversalBuffer& rowDistances);
 
-    size_t DBSCANBatchKernelUCAPI<algorithmFPType>::countNbrs(
+    services::Status countNbrs(
         const oneapi::internal::UniversalBuffer& assignments,
         const oneapi::internal::UniversalBuffer& RowDistances,
         size_t chunkOffset, 
@@ -112,8 +112,8 @@ private:
         oneapi::internal::UniversalBuffer& counters,
         oneapi::internal::UniversalBuffer& undefCounters);
 
-    uin32_t DBSCANBatchKernelUCAPI<algorithmFPType>::sumCounters(
-        const UniversalBuffer& counters,
+    uint32_t sumCounters(
+        const oneapi::internal::UniversalBuffer& counters,
         uint32_t numberOfChunks);
 
 
@@ -123,6 +123,7 @@ private:
     size_t _minSgSize = 16;
     size_t _maxWgSize = 256;
     size_t _chunkNumber = 64;
+    size_t _queueBlockSize = 64;
 };
 
 } // namespace internal
