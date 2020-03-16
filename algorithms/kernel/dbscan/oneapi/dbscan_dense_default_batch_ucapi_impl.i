@@ -160,7 +160,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                                                                        NumericTable * ntCoreIndices, NumericTable * ntCoreObservations,
                                                                        const Parameter * par)
 {
-
+    std::cout << "Compute" << std::endl;
     Status s;
     auto& context = Environment::getInstance()->getDefaultExecutionContext();
     auto& kernel_factory = context.getClKernelFactory();    
@@ -183,6 +183,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     BlockDescriptor<int> assignRows;
     DAAL_CHECK_STATUS_VAR(ntAssignments->getBlockOfRows(0, nRows, writeOnly, assignRows));
     auto assignments = daal::oneapi::internal::UniversalBuffer(assignRows.getBuffer());
+    std::cout << "Init assignments" << std::endl;
     {
         auto writeAssignments = assignments.template get<int>().toHost(ReadWriteMode::writeOnly);
         for(uint32_t i = 0; i < nRows; i++)
@@ -207,7 +208,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     DAAL_CHECK_STATUS_VAR(s);
     auto offsets = context.allocate(TypeIds::id<int>(), _chunkNumber, &s);
     DAAL_CHECK_STATUS_VAR(s);
-
+    std::cout << "Init isCore" << std::endl;
     {
         auto isCorePtr = isCore.template get<int>().toHost(ReadWriteMode::writeOnly).get();
         for(uint32_t i = 0; i < nRows; i++)
@@ -222,7 +223,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     {
         queueEnd.template get<int>().toHost(ReadWriteMode::writeOnly).get()[0] = qEnd;
     }
-
+    std::cout << "Main cycle: " << std::endl;
     for(int i = 0; i < nRows; i++)
     {
         {
@@ -230,24 +231,30 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
             if(assignPtr[i] != undefined)
                 continue;
         }
+        std::cout << "New point: " << i << std::endl;
         queryRow(data, nRows, i, dim, minkowskiPower, singleRowDistances);
         countNbrs(assignments, singleRowDistances, 0, nRows, _chunkNumber, eps, counters, undefCounters);
-        uint32_t totalNbrs = sumCounters(counters, _chunkNumber);
+        uint32_t totalNbrs = sumCounters(counters, _chunkNumber); //Add
         if(totalNbrs < minObservations)
         {
-            setBufferValue(assignments, i, noise);
+            setBufferValue(assignments, i, noise); //Add
             continue;
         }
         nClusters++;
-        setBufferValue(isCore, i, 1);
+        setBufferValue(isCore, i, 1); //Add
         countOffsets(undefCounters, _chunkNumber, offsets);
         processRowNbrs(rowDistances, offsets, i, nClusters - 1, 0, _chunkNumber, nRows, eps, assignments, queue, queueEnd);
         {
-            qEnd = queueEnd.template get<int>().toHost(ReadWriteMode::readOnly).get()[0];
+            uint32_t newNbrs = sumCounters(undefCounters, _chunkNumber);
+            auto queueEndPtr = queueEnd.template get<int>().toHost(ReadWriteMode::readWrite);
+            queueEndPtr.get()[0] += newNbrs;
+            qEnd = queueEndPtr.get()[0];
         }
+
         const uint32_t queueBlockSize = 64;
         while(qBegin < qEnd)
         {
+            std::cout << "Queue: " << qBegin << " " << qEnd << std::endl;
             uint32_t curQueueBlockSize = qEnd - qBegin;
             if( curQueueBlockSize > _queueBlockSize)
             {
@@ -260,10 +267,10 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                uint32_t curNbrs = sumCounters(counters, _chunkNumber);
                if(totalNbrs < minObservations)
                {
-                   setBufferValueByQueueIndex(assignments, queue, qBegin + j, noise);
+                   setBufferValueByQueueIndex(assignments, queue, qBegin + j, noise); //Add
                    continue;
                }
-               setBufferValueByQueueIndex(isCore, queue, qBegin + j, 1);
+               setBufferValueByQueueIndex(isCore, queue, qBegin + j, 1); //Add
                countOffsets(undefCounters, _chunkNumber, offsets);
                processRowNbrs(rowDistances, offsets, qBegin + j, nClusters - 1, nRows + j, _chunkNumber, nRows, eps, assignments, queue, queueEnd);
             }
@@ -506,15 +513,14 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::countNbrs(
 
     uint32_t chunkSize = nRows / numberOfChunks + uint32_t(bool(nRows % numberOfChunks));
 
-    KernelArguments args(8);
+    KernelArguments args(7);
     args.set(0, assignments, AccessModeIds::read);
     args.set(1, rowDistances, AccessModeIds::read);
-    args.set(2, chunkOffset);
-    args.set(3, chunkSize);
-    args.set(4, nRows);
-    args.set(5, eps);
-    args.set(6, counters, AccessModeIds::write);
-    args.set(7, counters, AccessModeIds::write);
+    args.set(2, chunkSize);
+    args.set(3, nRows);
+    args.set(4, eps);
+    args.set(5, counters, AccessModeIds::write);
+    args.set(6, undefCounters, AccessModeIds::write);
 
     KernelRange local_range(1, _maxWgSize);
     KernelRange global_range(numberOfChunks, _maxWgSize);
@@ -546,6 +552,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::buildProgram(ClKernelFactoryIfac
     Status st;
     auto fptype_name = oneapi::internal::getKeyFPType<algorithmFPType>();
     auto build_options = fptype_name;
+    build_options.add(" -D_NOISE_=-1 -D_UNDEFINED_=-2 ");
 
     services::String cachekey("__daal_algorithms_dbscan_block_");
     cachekey.add(fptype_name);
