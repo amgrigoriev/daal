@@ -32,7 +32,7 @@
 #include "oneapi/service_defines_oneapi.h"
 #include "oneapi/blas_gpu.h"
 
-#include "cl_kernels/dbscan_cl_kernels.cl"
+#include "cl_kernels/dbscan_cl_kernels_2.cl"
 
 #include "service_ittnotify.h"
 #include <iostream>
@@ -174,6 +174,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
 
     NumericTable *ntData = const_cast<NumericTable *>( x );
     const size_t nRows = ntData->getNumberOfRows();
+    std::cout << "Rows: " << nRows << std::endl;
     const size_t dim = ntData->getNumberOfColumns();
 
     BlockDescriptor<algorithmFPType> dataRows;
@@ -208,6 +209,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     DAAL_CHECK_STATUS_VAR(s);
     auto offsets = context.allocate(TypeIds::id<int>(), _chunkNumber, &s);
     DAAL_CHECK_STATUS_VAR(s);
+    std::cout << "Chunk number: " << _chunkNumber << std::endl;
     std::cout << "Init isCore" << std::endl;
     {
         auto isCorePtr = isCore.template get<int>().toHost(ReadWriteMode::writeOnly).get();
@@ -227,22 +229,55 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     for(int i = 0; i < nRows; i++)
     {
         {
-            auto assignPtr = assignments.template get<int>().toHost(ReadWriteMode::writeOnly).get();
-            if(assignPtr[i] != undefined)
+            auto assignPtr = assignments.template get<int>().toHost(ReadWriteMode::writeOnly);
+            if(assignPtr.get()[i] != undefined)
                 continue;
         }
         std::cout << "New point: " << i << std::endl;
-        queryRow(data, nRows, i, dim, minkowskiPower, singleRowDistances);
-        countNbrs(assignments, singleRowDistances, 0, nRows, _chunkNumber, eps, counters, undefCounters);
-        uint32_t totalNbrs = sumCounters(counters, _chunkNumber); //Add
+        DAAL_CHECK_STATUS_VAR(queryRow(data, nRows, i, dim, minkowskiPower, singleRowDistances));
+        {
+            auto dists = singleRowDistances.template get<algorithmFPType>().toHost(ReadWriteMode::readOnly);
+            std::cout << "Distances" << std::endl;
+            for(int j = 0; j < 20; j++)
+                std::cout << dists.get()[j] << " ";
+            std::cout << std::endl;
+            int nbrs = 0;
+            for(int j = 0; j < nRows; j++)
+                if(dists.get()[j] < eps) 
+                    nbrs++;
+            std::cout << "Real nbrs: " << nbrs << std::endl;
+        }
+        DAAL_CHECK_STATUS_VAR(countNbrs(assignments, singleRowDistances, 0, nRows, _chunkNumber, eps, counters, undefCounters)); //done
+        /*{
+            auto cntr = counters.template get<int>().toHost(ReadWriteMode::readOnly);
+            auto newcntr = undefCounters.template get<int>().toHost(ReadWriteMode::readOnly);
+            for(int j = 0; j < _chunkNumber; j++)
+                std::cout << "Cnt: " << cntr.get()[j] << " " << newcntr.get()[j] << std::endl;
+         }*/
+        uint32_t totalNbrs = sumCounters(counters, _chunkNumber); //done
+        std::cout << "Nbrs: " << totalNbrs << std::endl;
         if(totalNbrs < minObservations)
         {
-            setBufferValue(assignments, i, noise); //Add
+            std::cout << "Let's skip" << std::endl;
+            DAAL_CHECK_STATUS_VAR(setBufferValue(assignments, i, noise)); //Add
+            std::cout << "Skipperd" << std::endl;
             continue;
         }
         nClusters++;
-        setBufferValue(isCore, i, 1); //Add
-        countOffsets(undefCounters, _chunkNumber, offsets);
+        std::cout << "New cluster" << std::endl;
+        DAAL_CHECK_STATUS_VAR(setBufferValue(isCore, i, 1)); //Add
+        std::cout << "Core is set" << std::endl;
+        DAAL_CHECK_STATUS_VAR(countOffsets(undefCounters, _chunkNumber, offsets));
+        {
+            auto cntr = counters.template get<int>().toHost(ReadWriteMode::readOnly);
+            auto offs = offsets.template get<int>().toHost(ReadWriteMode::readOnly);
+            int off = 0;
+            for(int j = 0; j < _chunkNumber; j++) {
+                std::cout << "Offset: " << j << " " << off << " " << offs.get()[j] << std::endl;
+                off += cntr.get()[j];
+            }
+        }
+        exit(0);
         processRowNbrs(rowDistances, offsets, i, nClusters - 1, 0, _chunkNumber, nRows, eps, assignments, queue, queueEnd);
         {
             uint32_t newNbrs = sumCounters(undefCounters, _chunkNumber);
@@ -275,6 +310,8 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                processRowNbrs(rowDistances, offsets, qBegin + j, nClusters - 1, nRows + j, _chunkNumber, nRows, eps, assignments, queue, queueEnd);
             }
             qBegin += curQueueBlockSize;
+            std::cout << "Queue iteration done: " << qBegin << " " << qEnd << std::endl;
+            exit(0);
         }
     }
     ntData->releaseBlockOfRows(dataRows);
@@ -346,7 +383,7 @@ template <typename algorithmFPType>
 services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::countOffsets(
         const UniversalBuffer& counters,
         uint32_t numberOfChunks,
-        const UniversalBuffer& offsets) 
+        UniversalBuffer& offsets) 
 {
     services::Status st;
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.countOffsets);
@@ -356,7 +393,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::countOffsets(
     auto kernel = kernel_factory.getKernel("count_offsets", &st);
     DAAL_CHECK_STATUS_VAR(st);
 
-    KernelArguments args(2);
+    KernelArguments args(3);
     args.set(0, counters, AccessModeIds::read);
     args.set(1, offsets, AccessModeIds::write);
     args.set(2, numberOfChunks);
@@ -372,20 +409,23 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValue(
         uint32_t index,
         int value) 
 {
+    std::cout << "Do set buffer value" << std::endl;
     services::Status st;
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValue);
     auto& context = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
+    std::cout << "Taking kernel" << std::endl;
     auto kernel = kernel_factory.getKernel("set_buffer_value", &st);
     DAAL_CHECK_STATUS_VAR(st);
-
-    KernelArguments args(2);
+    std::cout << "Setting args" << std::endl;
+    KernelArguments args(3);
     args.set(0, buffer, AccessModeIds::readwrite);
     args.set(1, index);
     args.set(2, value);
 
     KernelRange global_range(1);
+    std::cout << "Run set buffer value: " << index << " " << value << std::endl;
     context.run(global_range, kernel, args, &st);
     return st;
 }
@@ -512,7 +552,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::countNbrs(
     DAAL_CHECK_STATUS_VAR(st);
 
     uint32_t chunkSize = nRows / numberOfChunks + uint32_t(bool(nRows % numberOfChunks));
-
+    std::cout << "Chunk size: " << chunkSize << std::endl;
     KernelArguments args(7);
     args.set(0, assignments, AccessModeIds::read);
     args.set(1, rowDistances, AccessModeIds::read);
@@ -523,7 +563,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::countNbrs(
     args.set(6, undefCounters, AccessModeIds::write);
 
     KernelRange local_range(1, _maxWgSize);
-    KernelRange global_range(numberOfChunks, _maxWgSize);
+    KernelRange global_range(numberOfChunks * _minSgSize / _maxWgSize + 1, _maxWgSize);
 
     KernelNDRange range(2);
     range.global(global_range, &st); DAAL_CHECK_STATUS_VAR(st);

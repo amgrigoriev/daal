@@ -71,7 +71,7 @@ private:
     services::Status countOffsets(
         const oneapi::internal::UniversalBuffer& counters,
         uint32_t numberOfChunks,
-        const oneapi::internal::UniversalBuffer& offsets);
+        oneapi::internal::UniversalBuffer& offsets);
 
     services::Status setBufferValue(
         oneapi::internal::UniversalBuffer& buffer,

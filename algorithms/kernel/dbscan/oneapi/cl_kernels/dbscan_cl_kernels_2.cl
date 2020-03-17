@@ -118,8 +118,8 @@ __kernel void count_neighbors(__global const int *assignments,
         return;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
-    if(index == 0 && id == 0)
-        printf("size %d \n", get_global_size(0));
+//    if(index == 0 && id == 0)
+//        printf("size %d \n", get_global_size(0));
     __global const algorithmFPType * input = &data[offset];
     __global const int * assigned = &assignments[offset];
     int count = 0;
@@ -127,8 +127,8 @@ __kernel void count_neighbors(__global const int *assignments,
     for(int i = id; i < number; i += size)
     {
         int nbrFlag = input[i] <= eps ? 1 : 0;
-        if(nbrFlag > 0)
-            printf("index %d id %d found \n", index, id);
+//        if(nbrFlag > 0)
+//            printf("index %d id %d found \n", index, id);
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
         count += nbrFlag;
         newCount += newNbrFlag;
@@ -137,20 +137,21 @@ __kernel void count_neighbors(__global const int *assignments,
     int retNewCount = sub_group_reduce_add(newCount);
     if(id == 0)
     {
-        printf(" global_id %d index %d numsubgroups %d subgroup_id %d offset %d number %d count %d \n", get_global_id(0), index, get_num_sub_groups(), 
-            get_sub_group_id(), offset, number, retCount);
+//        printf(" global_id %d index %d numsubgroups %d subgroup_id %d offset %d number %d count %d \n", get_global_id(0), index, get_num_sub_groups(), 
+//            get_sub_group_id(), offset, number, retCount);
         counters[index] = retCount;
         undefCounters[index] = retNewCount;
     }
 }
 
 
-__kernel void setBufferValue(__global int *buffer,
+__kernel void set_buffer_value(__global int *buffer,
                              int index,
                              int value)
 {
     const int global_id = get_global_id(0);
     const int local_id = get_local_id(1);
+    printf("buffer global_id %d local_id %d \n", global_id, local_id);
     if(local_id == 0 & global_id == 0)
         buffer[index] = value;
 }
@@ -163,6 +164,29 @@ __kernel void set_buffer_value_by_queue_index(__global int *queue,
     const int local_id = get_local_id(1);
     if(local_id == 0 & global_id == 0)
         buffer[queue[pos]] = value;
+}
+
+__kernel void count_offsets(__global const int * counters,
+                            __global int * offsets,
+                            int N)
+{
+    if(get_global_id(0) > 0 || get_sub_group_id() > 0)
+        return;
+    const int size = get_sub_group_size();
+    const int id = get_sub_group_local_id();
+    int start = 0;
+    for(int i = id; i < N; i += size)
+    {
+        int cur_counter = counters[i];
+        int local_offset = start + sub_group_scan_exclusive_add(cur_counter);
+        int total_offset = sub_group_reduce_add(cur_counter);
+        offsets[i] = local_offset;
+        start += total_offset;        
+        printf("id %d offset %d start %d res %d \n", id, local_offset, start, offsets[i]);
+    }
+    if(id == 0)
+        for(int i = 0; i < N; i++)
+            printf("res: %d %d \n", i, offsets[i]);
 }
 
 __kernel void process_row_neighbors(__global const algorithmFPType * distances,
