@@ -38,7 +38,7 @@ __kernel void query_row(__global const algorithmFPType *data,
                              int N) 
 {
 
-    const int index = get_global_id(0) * get_max_sub_group_num() + get_sub_group_id();
+    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
     if(index >= N)
         return;
     const int size = get_sub_group_size();
@@ -62,7 +62,7 @@ __kernel void query_row(__global const algorithmFPType *data,
 }
 
 __kernel void query_queue(__global const algorithmFPType *data,
-                             __global const int *queue,
+                             __global int *queue,
                              __global  algorithmFPType *dist,
                              int queue_begin,
                              int queue_size,
@@ -75,11 +75,11 @@ __kernel void query_queue(__global const algorithmFPType *data,
     if(queue_pos >= queue_size)
         return;
     const int id = queue[queue_begin + queue_pos];
-    const int group_num = get_sub_group_num()
-    const int group_id = get_sub_group_id()
+    const int group_num = get_num_sub_groups();
+    const int group_id = get_sub_group_id();
     const int group_size = get_sub_group_size();
     const int local_id = get_sub_group_local_id();
-    __global const algorithmFPType * cur_dist = &dist[queue_pos * N];
+    __global algorithmFPType * cur_dist = &dist[queue_pos * N];
     for(int j = group_id; j < N; j += group_num)
     {
         algorithmFPType sum = 0.0;
@@ -107,13 +107,13 @@ __kernel void count_neighbors(__global const int *assignments,
                             int N, 
                             algorithmFPType eps,
                              __global int *counters,
-                             __global int *undefCounters,
+                             __global int *undefCounters
                             ) 
 {
 
-    const int index = get_global_id(0) * get_max_sub_group_num() + get_sub_group_id();
+    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
     const int offset = index * chunk_size;
-    const int number = N - offset < M ? N - offset : M;
+    const int number = N - offset < chunk_size ? N - offset : chunk_size;
     if(index >= N)
         return;
     const int size = get_sub_group_size();
@@ -131,7 +131,7 @@ __kernel void count_neighbors(__global const int *assignments,
     }
     int retCount = sub_group_reduce_add(count);
     int retNewCount = sub_group_reduce_add(newCount);
-    if(local_id == 0)
+    if(id == 0)
     {
         counters[index] = retCount;
         undefCounters[index] = retNewCount;
@@ -144,7 +144,7 @@ __kernel void setBufferValue(__global int *buffer,
                              int value)
 {
     const int global_id = get_global_id(0);
-    const int global_id = get_local_id(1);
+    const int local_id = get_local_id(1);
     if(local_id == 0 & global_id == 0)
         buffer[index] = value;
 }
@@ -154,37 +154,39 @@ __kernel void set_buffer_value_by_queue_index(__global int *queue,
                              int value)
 {
     const int global_id = get_global_id(0);
-    const int global_id = get_local_id(1);
+    const int local_id = get_local_id(1);
     if(local_id == 0 & global_id == 0)
         buffer[queue[pos]] = value;
 }
 
 __kernel void process_row_neighbors(__global const algorithmFPType * distances,
                                     __global const int * offsets,
-                                    __global const int * assignments,
-                                    __global const int * queue,
-                                    __global const int * queue_end,
+                                    __global int * assignments,
+                                    __global int * queue,
+                                    __global int * queue_end,
                                     int row_id,
                                     int cluster_id,
                                     int chunk_size, 
                                     algorithmFPType eps,
                                     int N)
 {
-    const int index = get_global_id(0) * get_max_sub_group_num() + get_sub_group_id();
+    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
     const int offset = index * chunk_size;
     if(offset >= N)
         return;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
+    if(index == 0 && id == 0)
+        printf("queue End = %d", *queue_end);
     __global const algorithmFPType * input = &distances[offset];
-    __global const int * assigned = &assignments[offset];
-    const int out_offset = counters[index];
+    __global int * assigned = &assignments[offset];
+    const int out_offset = offsets[index];
     int local_offset = 0;
     for(int i = id; i < number; i++) {
         int nbrFlag = input[i] <= eps ? 1 : 0;
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
-        int pos = sub_group_scan_exclusive(newNbrFlag);
+        int pos = sub_group_scan_exclusive_add(newNbrFlag);
         if(newNbrFlag)
         {
             queue[*queue_end + offset + local_offset + pos] = offset + i;
@@ -203,16 +205,16 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
 
 __kernel void process_queue_neighbors(__global const algorithmFPType * distances,
                                     __global const int * offsets,
-                                    __global const int * assignments,
-                                    __global const int * queue,
-                                    __global const int * queue_end,
+                                    __global int * assignments,
+                                    __global int * queue,
+                                    __global int * queue_end,
                                     int queue_pos,
                                     int cluster_id,
                                     int chunk_size, 
                                     algorithmFPType eps,
                                     int N)
 {
-    const int index = get_global_id(0) * get_max_sub_group_num() + get_sub_group_id();
+    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
     const int offset = index * chunk_size;
     if(offset >= N)
         return;
@@ -220,13 +222,13 @@ __kernel void process_queue_neighbors(__global const algorithmFPType * distances
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
     __global const algorithmFPType * input = &distances[offset];
-    __global const int * assigned = &assignments[offset];
-    const int out_offset = counters[index];
+    __global int * assigned = &assignments[offset];
+    const int out_offset = offsets[index];
     int local_offset = 0;
     for(int i = id; i < number; i++) {
         int nbrFlag = input[i] <= eps ? 1 : 0;
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
-        int pos = sub_group_scan_exclusive(newNbrFlag);
+        int pos = sub_group_scan_exclusive_add(newNbrFlag);
         if(newNbrFlag)
         {
             queue[*queue_end + offset + local_offset + pos] = offset + i;
