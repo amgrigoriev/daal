@@ -59,7 +59,7 @@ __kernel void query_row(__global const algorithmFPType *data,
     {
         dist[index] = ret;
     }
-}
+} // Done
 
 __kernel void query_queue(__global const algorithmFPType *data,
                              __global int *queue,
@@ -107,24 +107,28 @@ __kernel void count_neighbors(__global const int *assignments,
                             int N, 
                             algorithmFPType eps,
                              __global int *counters,
-                             __global int *undefCounters
+                             __global int *undefCounters    
                             ) 
 {
 
-    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
+    const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
     const int offset = index * chunk_size;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
     if(index >= N)
         return;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
+    if(index == 0 && id == 0)
+        printf("size %d \n", get_global_size(0));
     __global const algorithmFPType * input = &data[offset];
     __global const int * assigned = &assignments[offset];
     int count = 0;
     int newCount = 0;
-    for(int i = id; i < number; i += chunk_size)
+    for(int i = id; i < number; i += size)
     {
         int nbrFlag = input[i] <= eps ? 1 : 0;
+        if(nbrFlag > 0)
+            printf("index %d id %d found \n", index, id);
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
         count += nbrFlag;
         newCount += newNbrFlag;
@@ -133,6 +137,8 @@ __kernel void count_neighbors(__global const int *assignments,
     int retNewCount = sub_group_reduce_add(newCount);
     if(id == 0)
     {
+        printf(" global_id %d index %d numsubgroups %d subgroup_id %d offset %d number %d count %d \n", get_global_id(0), index, get_num_sub_groups(), 
+            get_sub_group_id(), offset, number, retCount);
         counters[index] = retCount;
         undefCounters[index] = retNewCount;
     }
@@ -170,7 +176,7 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
                                     algorithmFPType eps,
                                     int N)
 {
-    const int index = get_global_id(0) * get_max_sub_group_size() + get_sub_group_id();
+    const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
     const int offset = index * chunk_size;
     if(offset >= N)
         return;
