@@ -63,10 +63,10 @@ private:
         uint32_t chunkOffset,
         uint32_t numberOfChunks,
         uint32_t nRows,
+        uint32_t qEnd,
         algorithmFPType eps,
         oneapi::internal::UniversalBuffer& assignments,
-        oneapi::internal::UniversalBuffer& queue,
-        oneapi::internal::UniversalBuffer& queueEnd);
+        oneapi::internal::UniversalBuffer& queue);
 
     services::Status countOffsets(
         const oneapi::internal::UniversalBuffer& counters,
@@ -105,6 +105,7 @@ private:
     services::Status countNbrs(
         const oneapi::internal::UniversalBuffer& assignments,
         const oneapi::internal::UniversalBuffer& RowDistances,
+        uint32_t rowId,
         size_t chunkOffset, 
         size_t nRows,
         size_t numberOfChunks,
