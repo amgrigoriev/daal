@@ -115,9 +115,10 @@ __kernel void count_neighbors(__global const int *assignments,
 {
 
     const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
-    const int offset = chunk_offset < 0 ? index * chunk_size : index * chunk_size + chunk_offset;
+    int offset = index * chunk_size;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
     row_id = chunk_offset < 0 ? row_id : queue[row_id];
+    offset += chunk_offset < 0 ? 0 : chunk_offset;
     if(index >= N)
         return;
     const int size = get_sub_group_size();
@@ -136,6 +137,9 @@ __kernel void count_neighbors(__global const int *assignments,
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
         count += nbrFlag;
         newCount += newNbrFlag;
+        if(newNbrFlag > 0)
+            printf("index %d id %d found \n", index, id);
+
     }
     int retCount = sub_group_reduce_add(count);
     int retNewCount = sub_group_reduce_add(newCount);
@@ -212,13 +216,14 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
+    /*
     if(index == 0 && id == 0) {
         printf("N = %d", N);
         printf("row = %d", row_id);
         for(int i = 0; i < 20; i++)
             printf("pos %d dist %f \n", i, distances[i]);
         printf("global size %d local size %d\n", get_global_size(0), get_local_size(1));
-    }
+    }*/
     __global const algorithmFPType * input = &distances[offset];
     __global int * assigned = &assignments[offset];
     const int out_offset = offsets[index];
@@ -230,8 +235,8 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
 //        printf("prc: index %d id %d shift %d offset %d nbr %d assigned %d input %f \n", index, id, i, offset, nbrFlag, assigned[i], distances[i + offset]);
         if(newNbrFlag)
         {
-            if(offset + i == row_id)
-                printf("new nbr: %d \n", offset + i);
+//            if(offset + i == row_id)
+//                printf("new nbr: %d \n", offset + i);
             queue[queue_end + out_offset + local_offset + pos] = offset + i;
         }
         if(nbrFlag && (assigned[i] == _NOISE_ || assigned[i] == _UNDEFINED_))
@@ -243,7 +248,7 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
     if(index == 0 && id == 0)
     {
         assignments[row_id] = cluster_id;
-        printf("assigned %d %d \n", row_id, assignments[row_id]);
+//        printf("assigned %d %d \n", row_id, assignments[row_id]);
     }
     if(index == 0 && id == 0)
         printf("eps %f \n", eps);
