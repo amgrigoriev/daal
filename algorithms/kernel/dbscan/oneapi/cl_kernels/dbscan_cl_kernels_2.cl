@@ -104,23 +104,26 @@ __kernel void query_queue(__global const algorithmFPType *data,
 __kernel void count_neighbors(__global const int *assignments,
                             __global const algorithmFPType *data,
                             int row_id,
+                            int chunk_offset,
                             int chunk_size, 
                             int N, 
                             algorithmFPType eps,
+                            __global const int *queue,
                              __global int *counters,
                              __global int *undefCounters    
                             ) 
 {
 
     const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
-    const int offset = index * chunk_size;
+    const int offset = chunk_offset < 0 ? index * chunk_size : index * chunk_size + chunk_offset;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
+    row_id = chunk_offset < 0 ? row_id : queue[row_id];
     if(index >= N)
         return;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
-//    if(index == 0 && id == 0)
-//        printf("size %d \n", get_global_size(0));
+    if(index == 0 && id == 0)
+        printf("row %d chunk_offset %d \n", row_id, chunk_offset);
     __global const algorithmFPType * input = &data[offset];
     __global const int * assigned = &assignments[offset];
     int count = 0;

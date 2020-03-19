@@ -105,11 +105,12 @@ private:
     services::Status countNbrs(
         const oneapi::internal::UniversalBuffer& assignments,
         const oneapi::internal::UniversalBuffer& RowDistances,
-        uint32_t rowId,
-        size_t chunkOffset, 
-        size_t nRows,
-        size_t numberOfChunks,
+        uint32_t rowId, 
+        int chunkOffset,
+        uint32_t nRows,
+        uint32_t numberOfChunks,
         algorithmFPType eps,
+        const oneapi::internal::UniversalBuffer& queue,
         oneapi::internal::UniversalBuffer& counters,
         oneapi::internal::UniversalBuffer& undefCounters);
 
