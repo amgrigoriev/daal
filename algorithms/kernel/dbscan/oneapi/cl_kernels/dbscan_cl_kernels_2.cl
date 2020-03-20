@@ -115,17 +115,17 @@ __kernel void count_neighbors(__global const int *assignments,
 {
 
     const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
-    int offset = index * chunk_size;
+    const int offset = index * chunk_size;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
     row_id = chunk_offset < 0 ? row_id : queue[row_id];
-    offset += chunk_offset < 0 ? 0 : chunk_offset;
+    const int distance_offset = offset + (chunk_offset < 0 ? 0 : chunk_offset);
     if(index >= N)
         return;
     const int size = get_sub_group_size();
     const int id = get_sub_group_local_id();
-    if(index == 0 && id == 0)
-        printf("row %d chunk_offset %d \n", row_id, chunk_offset);
-    __global const algorithmFPType * input = &data[offset];
+//    if(index == 0 && id == 0)
+//        printf("row %d chunk_offset %d \n", row_id, chunk_offset);
+    __global const algorithmFPType * input = &data[distance_offset];
     __global const int * assigned = &assignments[offset];
     int count = 0;
     int newCount = 0;
@@ -137,8 +137,8 @@ __kernel void count_neighbors(__global const int *assignments,
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
         count += nbrFlag;
         newCount += newNbrFlag;
-        if(newNbrFlag > 0)
-            printf("index %d id %d found \n", index, id);
+//        if(newNbrFlag > 0)
+//            printf("index %d id %d found \n", index, id);
 
     }
     int retCount = sub_group_reduce_add(count);
@@ -197,7 +197,7 @@ __kernel void count_offsets(__global const int * counters,
             printf("res: %d %d \n", i, offsets[i]);*/
 }
 
-__kernel void process_row_neighbors(__global const algorithmFPType * distances,
+__kernel void process_neighbors(__global const algorithmFPType * distances,
                                     __global const int * offsets,
                                     __global int * assignments,
                                     __global int * queue,
@@ -211,6 +211,8 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
 {
     const int index = get_global_id(0) * get_num_sub_groups() + get_sub_group_id();
     const int offset = index * chunk_size;
+    row_id = chunk_offset < 0 ? row_id : queue[row_id];
+    const int dist_offset = offset + (chunk_offset < 0 ? 0 : chunk_offset);
     if(offset >= N)
         return;
     const int number = N - offset < chunk_size ? N - offset : chunk_size;
@@ -224,12 +226,12 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
             printf("pos %d dist %f \n", i, distances[i]);
         printf("global size %d local size %d\n", get_global_size(0), get_local_size(1));
     }*/
-    __global const algorithmFPType * input = &distances[offset];
+    __global const algorithmFPType * input = &distances[dist_offset];
     __global int * assigned = &assignments[offset];
     const int out_offset = offsets[index];
     int local_offset = 0;
     for(int i = id; i < number; i += size) {
-        int nbrFlag = (distances[i + offset] <= eps && (i + offset) != row_id) ? 1 : 0;
+        int nbrFlag = (input[i] <= eps && (i + offset) != row_id) ? 1 : 0;
         int newNbrFlag = nbrFlag > 0 && assigned[i] == _UNDEFINED_ ? 1 : 0;
         int pos = sub_group_scan_exclusive_add(newNbrFlag);
 //        printf("prc: index %d id %d shift %d offset %d nbr %d assigned %d input %f \n", index, id, i, offset, nbrFlag, assigned[i], distances[i + offset]);
@@ -253,7 +255,7 @@ __kernel void process_row_neighbors(__global const algorithmFPType * distances,
     if(index == 0 && id == 0)
         printf("eps %f \n", eps);
 }
-
+/*
 __kernel void process_queue_neighbors(__global const algorithmFPType * distances,
                                     __global const int * offsets,
                                     __global int * assignments,
@@ -295,7 +297,7 @@ __kernel void process_queue_neighbors(__global const algorithmFPType * distances
         assignments[queue[queue_pos]] = cluster_id;
     }
 }
-
+*/
 );
 
 #endif
