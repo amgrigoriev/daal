@@ -35,6 +35,8 @@
 #include "service_kernel_math.h"
 #include "service_error_handling.h"
 
+#include <iostream>
+
 using namespace daal::internal;
 using namespace daal::services::internal;
 using namespace daal::algorithms::internal;
@@ -406,7 +408,9 @@ public:
         const size_t outDim = _outTable->getNumberOfColumns();
         DAAL_ASSERT(outDim >= dim);
 
+        std::cout << "eps p " << _eps << " " << _p << std::endl;
         const FPType epsP = Math<FPType, cpu>::sPowx(_eps, _p);
+        std::cout << "epsP " << epsP << std::endl;
 
         const size_t inBlockSize = 256;
         const size_t nInBlocks   = inRows / inBlockSize + (inRows % inBlockSize > 0);
@@ -503,7 +507,9 @@ public:
             }
         }
 
+        std::cout << "eps p " << _eps << " " << _p << std::endl;
         FPType epsP = Math<FPType, cpu>::sPowx(_eps, _p);
+        std::cout << "epsP " << epsP << std::endl;
 
         size_t outBlockSize = 256;
         size_t nOutBlocks   = outRows / outBlockSize + (outRows % outBlockSize > 0);

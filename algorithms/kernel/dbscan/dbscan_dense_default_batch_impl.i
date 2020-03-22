@@ -210,6 +210,18 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeNoMemSave(const N
             DAAL_CHECK_STATUS_VAR(processNeighborhood(nClusters - 1, assignments, curNeigh, qu));
         }
     }
+    
+    int cores = 0;
+    int cnt0 = 0;
+    for(int j = 0; j < nRows; j++) {
+        cores += isCore[j];
+        if(isCore[j])
+            std::cout << "Core: " << j << std::endl;
+        if(assignments[j] == 0)
+            cnt0++;
+    }
+    std::cout << "Cores " << cores << std::endl;
+    std::cout << "Cl0 " << cnt0 << std::endl;
 
     WriteRows<int, cpu> nClustersRows(ntNClusters, 0, 1);
     DAAL_CHECK_BLOCK_STATUS(nClustersRows);
@@ -314,6 +326,18 @@ Status DBSCANBatchKernel<algorithmFPType, method, cpu>::computeMemSave(const Num
             DAAL_CHECK_STATUS_VAR(processNeighborhood(nClusters - 1, assignments, curNeigh, qu));
         }
     }
+
+    int cores = 0;
+    int cnt0 = 0;
+    for(int j = 0; j < nRows; j++) {
+        cores += isCore[j];
+        if(isCore[j])
+            std::cout << "Core: " << j << std::endl;
+        if(assignments[j] == 0)
+            cnt0++;
+    }
+    std::cout << "Cores " << cores << std::endl;
+    std::cout << "Cl0 " << cnt0 << std::endl;
 
     WriteRows<int, cpu> nClustersRows(ntNClusters, 0, 1);
     DAAL_CHECK_BLOCK_STATUS(nClustersRows);

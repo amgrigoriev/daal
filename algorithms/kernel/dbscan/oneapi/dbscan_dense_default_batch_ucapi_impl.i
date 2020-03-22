@@ -340,21 +340,19 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                 uint32_t curNbrs = sumCounters(counters, _chunkNumber);
                 uint32_t curNewNbrs = sumCounters(undefCounters, _chunkNumber); //done
                 std::cout << "Counted nbrs: " << curNbrs << " " << curNewNbrs << std::endl;
-                if(totalNbrs < minObservations)
+                setBufferValueByQueueIndex(assignments, queue, qBegin + j, nClusters - 1); //Add
+                if(curNbrs < minObservations)
                 {
                     std::cout << "Skip noise" << std::endl;
-                    setBufferValueByQueueIndex(assignments, queue, qBegin + j, noise); //Add
                     continue;
                 }
                 setBufferValueByQueueIndex(isCore, queue, qBegin + j, 1); //Add
+              
                 if(curNewNbrs > 0) {
                     std::cout << "Proessing queue: " << j << " " << curNewNbrs << std::endl;
                     countOffsets(undefCounters, _chunkNumber, offsets);
                     processRowNbrs(rowDistances, offsets, qBegin + j, nClusters - 1, nRows * j, _chunkNumber, nRows, qEnd, eps, assignments, queue);
-                } else {
-                    std::cout << "Assigned without new ngrs" << std::endl;
-                    setBufferValueByQueueIndex(assignments, queue, qBegin + j, nClusters - 1); //Add
-                }
+                } 
                 {
                     auto qu = queue.template get<int>().toHost(ReadWriteMode::readOnly);
                     std::cout << "Queue append: ";
@@ -375,12 +373,28 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
             std::cout << "Queue iteration done: " << qBegin << " " << qEnd << std::endl;
         }
     }
+    {
+        int core_count = 0;
+        auto cr = isCore.template get<int>().toHost(ReadWriteMode::readOnly);
+        for(int j = 0; j < nRows; j++)
+            if(cr.get()[j] > 0) {
+                core_count++;
+                std::cout << "Core: " << j << std::endl;
+            }
+        std::cout << "Cores: " << core_count << std::endl;
+        int cl0 = 0;
+        auto cl = assignments.template get<int>().toHost(ReadWriteMode::readOnly);
+                    for(int j = 0; j < nRows; j++)
+                        if(cl.get()[j] == 0)
+                            cl0++;
+        std::cout << "Cluster0: " << cl0 << std::endl;
+    }                    
     ntData->releaseBlockOfRows(dataRows);
-    /*
+    
     BlockDescriptor<int> nClustersRows;
     DAAL_CHECK_STATUS_VAR(ntNClusters->getBlockOfRows(0, 1, writeOnly, nClustersRows));
     nClustersRows.getBuffer().toHost(ReadWriteMode::writeOnly).get()[0] = nClusters;
-
+    /*
     if (par->resultsToCompute & (computeCoreIndices | computeCoreObservations))
     {
         DAAL_CHECK_STATUS_VAR(processResultsToCompute(par->resultsToCompute, isCore, ntData, ntCoreIndices, ntCoreObservations));
