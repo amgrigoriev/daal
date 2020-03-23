@@ -172,6 +172,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     for(uint32_t i = 0; i < minkowskiPower; i++)
         eps *= epsilon;
     std::cout << "EPS: " << eps << std::endl;
+    std::cout << "minObservations: " << minObservations << std::endl; 
 
     NumericTable *ntData = const_cast<NumericTable *>( x );
     const size_t nRows = ntData->getNumberOfRows();
@@ -181,6 +182,8 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     BlockDescriptor<algorithmFPType> dataRows;
     ntData->getBlockOfRows(0, nRows, readOnly, dataRows);
     auto data = dataRows.getBuffer();
+
+    int problemPoint = 3363;
 
     BlockDescriptor<int> assignRows;
     DAAL_CHECK_STATUS_VAR(ntAssignments->getBlockOfRows(0, nRows, writeOnly, assignRows));
@@ -233,12 +236,29 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
         queueEnd.template get<int>().toHost(ReadWriteMode::writeOnly).get()[0] = qEnd;
     }
     std::cout << "Main cycle: " << std::endl;
+    DAAL_CHECK_STATUS_VAR(queryRow(data, nRows, problemPoint, dim, minkowskiPower, singleRowDistances));
+    {
+        auto dists = singleRowDistances.template get<algorithmFPType>().toHost(ReadWriteMode::readOnly);
+        int count25 = 0;
+        for(int i = 0; i < nRows; i++)
+        {
+            if(dists.get()[i] < eps)
+                count25++;
+        }
+        std::cout << "ProblemCount = " << count25 << std::endl;
+    }
+    
     for(int i = 0; i < nRows; i++)
     {
         {
             auto assignPtr = assignments.template get<int>().toHost(ReadWriteMode::writeOnly);
+            if(i == problemPoint) {
+                std::cout << "Skipped problem one: " << assignPtr.get()[i] << std::endl;
+//                exit(0);
+            }
             if(assignPtr.get()[i] != undefined)
                 continue;
+            
         }
         std::cout << "New point: " << i << std::endl;
         DAAL_CHECK_STATUS_VAR(queryRow(data, nRows, i, dim, minkowskiPower, singleRowDistances));
@@ -268,18 +288,22 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
          }*/
         uint32_t totalNbrs = sumCounters(counters, _chunkNumber); //done
         uint32_t newNbrs = sumCounters(undefCounters, _chunkNumber); //done
-        std::cout << "Nbrs: " << totalNbrs << std::endl;
+//        std::cout << "Nbrs: " << totalNbrs << std::endl;
         if(totalNbrs < minObservations)
         {
-            std::cout << "Let's skip" << std::endl;
+//            std::cout << "Let's skip" << std::endl;
             DAAL_CHECK_STATUS_VAR(setBufferValue(assignments, i, noise)); //Add
-            std::cout << "Skipperd" << std::endl;
+            if(i == problemPoint){
+                std::cout << "Problem noise found" << std::endl;
+                exit(0);
+            }
+//            std::cout << "Skipperd" << std::endl;
             continue;
         }
         nClusters++;
-        std::cout << "New cluster" << std::endl;
+//        std::cout << "New cluster" << std::endl;
         DAAL_CHECK_STATUS_VAR(setBufferValue(isCore, i, 1)); //Add
-        std::cout << "Core is set" << std::endl;
+//        std::cout << "Core is set" << std::endl;
         DAAL_CHECK_STATUS_VAR(countOffsets(undefCounters, _chunkNumber, offsets));
         /*{
             auto cntr = counters.template get<int>().toHost(ReadWriteMode::readOnly);
@@ -291,7 +315,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
             }
         }*/
         
-        DAAL_CHECK_STATUS_VAR(processRowNbrs(singleRowDistances, offsets, i, nClusters - 1, 0, 
+        DAAL_CHECK_STATUS_VAR(processRowNbrs(singleRowDistances, offsets, i, nClusters - 1, -1, 
                                             _chunkNumber, nRows, qEnd, eps, assignments, queue));
 /*        {
             auto queueread = queue.template get<int>().toHost(ReadWriteMode::readOnly);
@@ -308,58 +332,60 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
 
         while(qBegin < qEnd)
         {
-            std::cout << "Queue: " << qBegin << " " << qEnd << std::endl;
+//            std::cout << "Queue: " << qBegin << " " << qEnd << std::endl;
             uint32_t curQueueBlockSize = qEnd - qBegin;
             if( curQueueBlockSize > _queueBlockSize)
             {
                 curQueueBlockSize = _queueBlockSize;
             }
-            std::cout << "curQueueBlockSize: " << curQueueBlockSize << std::endl;
+//            std::cout << "curQueueBlockSize: " << curQueueBlockSize << std::endl;
             queryQueueRows(data, nRows, queue, qBegin, curQueueBlockSize, dim, minkowskiPower, rowDistances);
-            {
-                auto rd = rowDistances.template get<algorithmFPType>().toHost(ReadWriteMode::readOnly);
-                auto as = assignments.template get<int>().toHost(ReadWriteMode::readOnly);
-                for(int j = 0; j < curQueueBlockSize; j++)
-                {
-                    int neighbors = 0;
-                    int freenbrs = 0;
-                    for(int k = 0; k < nRows; k++)
-                        if(rd.get()[nRows * j + k] <= eps) {
-                            neighbors++;
-                            if(as.get()[k] < 0) {
-                                freenbrs++;
-//                                std::cout << "  free: " << k << " " << as.get()[k] << std::endl;
-                            }
-                        }
-                    std::cout << "NbrQ: " << neighbors << " " << freenbrs << std::endl;
-                }
-            }
             for(int j = 0; j < curQueueBlockSize; j++)
             {
+                static int count = 0;
+                bool do_break = false;
+                {
+                    auto qu = queue.template get<int>().toHost(ReadWriteMode::readOnly);
+                    if(qu.get()[qBegin + j] == problemPoint) {
+                        std::cout << "!!!Found: " << qBegin << " " << j << " " << count << std::endl;
+                        std::cout << "  i=" << i << std::endl; 
+//                        do_break = true;
+//                        exit(0);
+                    }
+                    
+
+                }
                 countNbrs(assignments, rowDistances, qBegin + j, nRows * j, nRows, _chunkNumber, eps, queue, counters, undefCounters);
                 uint32_t curNbrs = sumCounters(counters, _chunkNumber);
                 uint32_t curNewNbrs = sumCounters(undefCounters, _chunkNumber); //done
-                std::cout << "Counted nbrs: " << curNbrs << " " << curNewNbrs << std::endl;
+                if(do_break)
+                    std::cout << "Counted nbrs: " << j << " " << curNbrs << " " << curNewNbrs << std::endl;
                 setBufferValueByQueueIndex(assignments, queue, qBegin + j, nClusters - 1); //Add
                 if(curNbrs < minObservations)
                 {
-                    std::cout << "Skip noise" << std::endl;
+                    if(do_break) {
+                        std::cout << "  Skip noise" << std::endl;
+                        exit(0);
+                    }
                     continue;
                 }
                 setBufferValueByQueueIndex(isCore, queue, qBegin + j, 1); //Add
-              
                 if(curNewNbrs > 0) {
-                    std::cout << "Proessing queue: " << j << " " << curNewNbrs << std::endl;
+                    static int count = 0;
+                    count++;
+                    std::cout << "Proessing queue: " << count << " " << curNewNbrs << std::endl;
                     countOffsets(undefCounters, _chunkNumber, offsets);
                     processRowNbrs(rowDistances, offsets, qBegin + j, nClusters - 1, nRows * j, _chunkNumber, nRows, qEnd, eps, assignments, queue);
                 } 
-                {
+/*                {
                     auto qu = queue.template get<int>().toHost(ReadWriteMode::readOnly);
                     std::cout << "Queue append: ";
                     for(int k = qEnd; k < qEnd + curNewNbrs; k++)
                         std::cout << qu.get()[k] << " ";
                     std::cout << std::endl;
-                }
+                } */
+                if(do_break)
+                    exit(0);
                 qEnd += curNewNbrs;
                 /*{
                     auto cr = isCore.template get<int>().toHost(ReadWriteMode::readOnly);
@@ -368,7 +394,15 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                             std::cout << j << " ";
                     std::cout << std::endl;
                 }*/
+                
             }
+            /*{
+                auto cr = isCore.template get<int>().toHost(ReadWriteMode::readOnly);
+                for(int k = 0; k < 30; k++)
+                {
+                    std::cout << "isCore: " << k << " " << cr.get()[k] << std::endl; 
+                }
+            }*/
             qBegin += curQueueBlockSize;
             std::cout << "Queue iteration done: " << qBegin << " " << qEnd << std::endl;
         }
@@ -423,7 +457,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::processRowNbrs(
     auto& context = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
-    std::cout << "Process nbrs. chunkOffset = " << chunkOffset << std::endl;
+//    std::cout << "Process nbrs. chunkOffset = " << chunkOffset << std::endl;
     auto kernel = kernel_factory.getKernel("process_neighbors", &st);
     DAAL_CHECK_STATUS_VAR(st);
 
