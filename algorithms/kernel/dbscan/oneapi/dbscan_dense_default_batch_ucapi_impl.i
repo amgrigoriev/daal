@@ -26,6 +26,8 @@
 #include "algorithms/kernel/dbscan/oneapi/cl_kernels/dbscan_cl_kernels.cl"
 #include "externals/service_ittnotify.h"
 
+#include <iostream>
+
 using namespace daal::services;
 using namespace daal::oneapi::internal;
 using namespace daal::data_management;
@@ -41,6 +43,7 @@ namespace internal
 template <typename algorithmFPType>
 services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint32_t nRows)
 {
+    std::cout << "Initilize buffers begin" << std::endl;
     Status s;
     auto & context = Environment::getInstance()->getDefaultExecutionContext();
     DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(uint32_t, _queueBlockSize, nRows);
@@ -61,11 +64,13 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     context.fill(_isCore, 0, &s);
     DAAL_CHECK_STATUS_VAR(s);
     return s;
+    std::cout << "Initilize buffers end" << std::endl;
 }
 
 template <typename algorithmFPType>
 bool DBSCANBatchKernelUCAPI<algorithmFPType>::canQueryRow(const UniversalBuffer & assignments, uint32_t rowIndex, Status * s)
 {
+    std::cout << "Can querry row" << std::endl;
     auto pointAssignment = assignments.template get<int>().getSubBuffer(rowIndex, 1, s);
     if (s && !s->ok())
     {
@@ -78,23 +83,27 @@ bool DBSCANBatchKernelUCAPI<algorithmFPType>::canQueryRow(const UniversalBuffer 
         return Status(ErrorNullPtr);
     }
     return (assignPtr.get()[0] == undefined);
+    std::cout << "Can querry row end" << std::endl;
 }
 
 template <typename algorithmFPType>
 uint32_t DBSCANBatchKernelUCAPI<algorithmFPType>::computeQueueBlockSize(uint32_t queueBegin, uint32_t queueEnd)
 {
+    std::cout << "compute block size" << std::endl;
     uint32_t size = queueEnd - queueBegin;
     if (size > _queueBlockSize)
     {
         size = _queueBlockSize;
     }
     return size;
+    std::cout << "compute block size end" << std::endl;
 }
 
 template <typename algorithmFPType>
 Status DBSCANBatchKernelUCAPI<algorithmFPType>::processResultsToCompute(DAAL_UINT64 resultsToCompute, NumericTable * ntData,
                                                                         NumericTable * ntCoreIndices, NumericTable * ntCoreObservations)
 {
+    std::cout << "process results to compute" << std::endl;
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.processResultsToCompute);
     auto isCoreHost = _isCore.template get<int>().toHost(ReadWriteMode::readOnly);
     auto isCore     = isCoreHost.get();
@@ -171,6 +180,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::processResultsToCompute(DAAL_UIN
             DAAL_CHECK_STATUS_VAR(ntData->releaseBlockOfRows(dataRows));
         }
     }
+    std::cout << "process results to compute end" << std::endl;
 
     return Status();
 }
@@ -180,6 +190,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
                                                         NumericTable * ntNClusters, NumericTable * ntCoreIndices, NumericTable * ntCoreObservations,
                                                         const Parameter * par)
 {
+    std::cout << "compute" << std::endl;
     Status s;
     auto & context                = Environment::getInstance()->getDefaultExecutionContext();
     const uint32_t minkowskiPower = 2;
@@ -268,6 +279,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     {
         DAAL_CHECK_STATUS_VAR(processResultsToCompute(par->resultsToCompute, ntData, ntCoreIndices, ntCoreObservations));
     }
+    std::cout << "compute end" << std::endl;
     return s;
 }
 

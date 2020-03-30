@@ -80,7 +80,7 @@ private:
 
     uint32_t computeQueueBlockSize(uint32_t queueBegin, uint32_t queueEnd);
 
-    uint32_t getWorkgroupNumber(uint32_t numberOfChunks) { return numberOfChunks * _minSubgroupSize / _maxWorkgroupSize + 1; }
+    uint32_t getWorkgroupNumber(uint32_t numberOfChunks) { return (numberOfChunks * _minSubgroupSize / _maxWorkgroupSize + 1); }
 
     services::Status initializeBuffers(uint32_t nRows);
 
