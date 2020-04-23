@@ -314,8 +314,8 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::pushNeighborsToQueue(c
     args.set(9, assignments, AccessModeIds::readwrite);
     args.set(10, queue, AccessModeIds::readwrite);
 
-    KernelRange local_range(1, _maxWorkgroupSize);
-    KernelRange global_range(getWorkgroupNumber(numberOfChunks), _maxWorkgroupSize);
+    KernelRange local_range(1, 16);
+    KernelRange global_range(numberOfChunks, 16);
 
     KernelNDRange range(2);
     range.global(global_range, &st);
@@ -510,8 +510,9 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::countPointNeighbors(const Univer
     args.set(8, countersTotal, AccessModeIds::write);
     args.set(9, countersNewNeighbors, AccessModeIds::write);
 
-    KernelRange local_range(1, _maxWorkgroupSize);
-    KernelRange global_range(getWorkgroupNumber(numberOfChunks), _maxWorkgroupSize);
+    KernelRange local_range(1, 16);
+    KernelRange global_range(numberOfChunks, 16);
+//    std::cout << "Dim: " << getWorkgroupNumber(numberOfChunks) << " " << _maxWorkgroupSize << std::endl;
 
     KernelNDRange range(2);
     range.global(global_range, &st);
