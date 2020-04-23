@@ -50,7 +50,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     DAAL_CHECK_STATUS_VAR(s);
 //    _queue = context.allocate(TypeIds::id<int>(), nRows, &s);
     int * queuePtr = new int[nRows];
-    _queue = Buffer<int>(queuePtr, nRows);        
+    _queue = Buffer<int>(queuePtr, nRows);
 
     DAAL_CHECK_STATUS_VAR(s);
 //    _isCore = context.allocate(TypeIds::id<int>(), nRows, &s);
@@ -72,7 +72,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     for(int i = 0; i < nRows; i++)
         queuePtr.get()[i] = -1;*/
 
-//   daal::services::Buffer<DataType>((DataType *)_rawPtr, _ncols * _nrows);        
+//   daal::services::Buffer<DataType>((DataType *)_rawPtr, _ncols * _nrows);
 //    context.fill(_isCore, 0, &s);
     DAAL_CHECK_STATUS_VAR(s);
     return s;
@@ -387,7 +387,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValueByQueueI
         auto queuePtr = queueHost.toHost(ReadWriteMode::readOnly);
         index = static_cast<uint32_t>(queuePtr.get()[0]);
     }
-    { 
+    {
         DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValueByIndirectIndex.Buffer);
         auto pointAssignment = buffer.template get<int>().getSubBuffer(index, 1, &st);
         auto assignPtr = pointAssignment.toHost(ReadWriteMode::writeOnly);

@@ -70,7 +70,7 @@ DAAL_EXPORT services::Status Result::allocate(const daal::algorithms::Input * in
         set(coreObservations, HomogenNumericTable<algorithmFPType>::create(nFeatures, 0, NumericTable::notAllocate, &status));
     }
     }
-    else 
+    else
     {
     set(assignments, SyclHomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
     set(nClusters, SyclHomogenNumericTable<int>::create(1, 1, NumericTable::doAllocate, &status));
