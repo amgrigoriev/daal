@@ -26,6 +26,8 @@
 
 #include "algorithms/dbscan/dbscan_types.h"
 
+#include "data_management/data/numeric_table_sycl_homogen.h"
+
 using namespace daal::data_management;
 
 namespace daal
@@ -50,6 +52,11 @@ DAAL_EXPORT services::Status Result::allocate(const daal::algorithms::Input * in
     const size_t nFeatures = algInput->get(data)->getNumberOfColumns();
 
     services::Status status;
+        auto & context    = services::Environment::getInstance()->getDefaultExecutionContext();
+    auto & deviceInfo = context.getInfoDevice();
+
+    if (1/*deviceInfo.isCpu || method != defaultDense*/)
+    {
     set(assignments, HomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
     set(nClusters, HomogenNumericTable<int>::create(1, 1, NumericTable::doAllocate, &status));
 
@@ -62,7 +69,23 @@ DAAL_EXPORT services::Status Result::allocate(const daal::algorithms::Input * in
     {
         set(coreObservations, HomogenNumericTable<algorithmFPType>::create(nFeatures, 0, NumericTable::notAllocate, &status));
     }
+    }
+    else 
+    {
+    set(assignments, SyclHomogenNumericTable<int>::create(1, nRows, NumericTable::doAllocate, &status));
+    set(nClusters, SyclHomogenNumericTable<int>::create(1, 1, NumericTable::doAllocate, &status));
 
+    if (par->resultsToCompute & computeCoreIndices)
+    {
+        set(coreIndices, SyclHomogenNumericTable<int>::create(1, 0, NumericTable::notAllocate, &status));
+    }
+
+    if (par->resultsToCompute & computeCoreObservations)
+    {
+        set(coreObservations, SyclHomogenNumericTable<algorithmFPType>::create(nFeatures, 0, NumericTable::notAllocate, &status));
+    }
+
+    }
     return status;
 }
 

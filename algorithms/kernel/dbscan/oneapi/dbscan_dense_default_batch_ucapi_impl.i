@@ -29,7 +29,7 @@
 using namespace daal::services;
 using namespace daal::oneapi::internal;
 using namespace daal::data_management;
-
+#include <iostream>
 namespace daal
 {
 namespace algorithms
@@ -48,9 +48,16 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     DAAL_CHECK_STATUS_VAR(s);
     _singlePointDistances = context.allocate(TypeIds::id<algorithmFPType>(), nRows, &s);
     DAAL_CHECK_STATUS_VAR(s);
-    _queue = context.allocate(TypeIds::id<int>(), nRows, &s);
+//    _queue = context.allocate(TypeIds::id<int>(), nRows, &s);
+    int * queuePtr = new int[nRows];
+    _queue = Buffer<int>(queuePtr, nRows);        
+
     DAAL_CHECK_STATUS_VAR(s);
-    _isCore = context.allocate(TypeIds::id<int>(), nRows, &s);
+//    _isCore = context.allocate(TypeIds::id<int>(), nRows, &s);
+    int * corePtr = new int[nRows];
+    for(int i = 0; i < nRows; i++)
+        corePtr[i] = 0;
+    _isCore = Buffer<int>(corePtr, nRows);
     DAAL_CHECK_STATUS_VAR(s);
     _countersTotal = context.allocate(TypeIds::id<int>(), _chunkNumber, &s);
     DAAL_CHECK_STATUS_VAR(s);
@@ -58,7 +65,15 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     DAAL_CHECK_STATUS_VAR(s);
     _chunkOffsets = context.allocate(TypeIds::id<int>(), _chunkNumber, &s);
     DAAL_CHECK_STATUS_VAR(s);
-    context.fill(_isCore, 0, &s);
+/*    auto assignPtr = _isCore.template get<int>().toHost(ReadWriteMode::writeOnly);
+    for(int i = 0; i < nRows; i++)
+        assignPtr.get()[i] = 0;
+    auto queuePtr = _queue.template get<int>().toHost(ReadWriteMode::writeOnly);
+    for(int i = 0; i < nRows; i++)
+        queuePtr.get()[i] = -1;*/
+
+//   daal::services::Buffer<DataType>((DataType *)_rawPtr, _ncols * _nrows);        
+//    context.fill(_isCore, 0, &s);
     DAAL_CHECK_STATUS_VAR(s);
     return s;
 }
@@ -80,6 +95,7 @@ bool DBSCANBatchKernelUCAPI<algorithmFPType>::canQueryRow(const UniversalBuffer 
 template <typename algorithmFPType>
 uint32_t DBSCANBatchKernelUCAPI<algorithmFPType>::computeQueueBlockSize(uint32_t queueBegin, uint32_t queueEnd)
 {
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.canQueryRow);
     uint32_t size = queueEnd - queueBegin;
     if (size > _queueBlockSize)
     {
@@ -338,6 +354,12 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValue(Univers
 {
     services::Status st;
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValue);
+    auto pointAssignment = buffer.template get<int>().getSubBuffer(index, 1, &st);
+
+    auto assignPtr = pointAssignment.toHost(ReadWriteMode::writeOnly);
+    assignPtr.get()[0] = value;
+    return st;
+
     auto & context        = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
@@ -358,7 +380,22 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::setBufferValueByQueueI
                                                                                      uint32_t posInQueue, int value)
 {
     services::Status st;
-    DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValueByIndirectIndex);
+    uint32_t index;
+    {
+        DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValueByIndirectIndex.Queue);
+        auto queueHost = queue.template get<int>().getSubBuffer(posInQueue, 1, &st);
+        auto queuePtr = queueHost.toHost(ReadWriteMode::readOnly);
+        index = static_cast<uint32_t>(queuePtr.get()[0]);
+    }
+    { 
+        DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValueByIndirectIndex.Buffer);
+        auto pointAssignment = buffer.template get<int>().getSubBuffer(index, 1, &st);
+        auto assignPtr = pointAssignment.toHost(ReadWriteMode::writeOnly);
+        assignPtr.get()[0] = value;
+    }
+    return st;
+
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.setBufferValueByIndirectIndex.Queue);
     auto & context        = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
