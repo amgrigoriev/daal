@@ -60,7 +60,7 @@ private:
                           uint32_t nClusters, uint32_t nFeatures, services::Status * st);
 
     void computeAssignments(oneapi::internal::ExecutionContextIface & context, const oneapi::internal::KernelPtr & kernel_compute_assignments,
-                            oneapi::internal::UniversalBuffer & distances, const services::Buffer<int> & assignments,
+                            oneapi::internal::UniversalBuffer & centroidsSq, oneapi::internal::UniversalBuffer & distances, const services::Buffer<int> & assignments,
                             oneapi::internal::UniversalBuffer & mindistances, uint32_t blockSize, uint32_t nClusters, services::Status * st);
 
     void computePartialCandidates(oneapi::internal::ExecutionContextIface & context, const oneapi::internal::KernelPtr & kernel_partial_candidates,

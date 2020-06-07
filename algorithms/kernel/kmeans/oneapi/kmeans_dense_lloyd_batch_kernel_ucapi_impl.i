@@ -219,11 +219,9 @@ Status KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::compute(const NumericT
 
             computeSquares(context, compute_squares, inCentroids, centroidsSq, nClusters, nFeatures, &st);
             DAAL_CHECK_STATUS_VAR(st);
-            initDistances(context, init_distances, centroidsSq, distances, curBlockSize, nClusters, &st);
-            DAAL_CHECK_STATUS_VAR(st);
             computeDistances(context, data, inCentroids, distances, curBlockSize, nClusters, nFeatures, &st);
             DAAL_CHECK_STATUS_VAR(st);
-            computeAssignments(context, compute_assignments, distances, assignments, mindistances, curBlockSize, nClusters, &st);
+            computeAssignments(context, compute_assignments, centroidsSq, distances, assignments, mindistances, curBlockSize, nClusters, &st);
             DAAL_CHECK_STATUS_VAR(st);
             computeSquares(context, compute_squares, data, dataSq, curBlockSize, nFeatures, &st);
             DAAL_CHECK_STATUS_VAR(st);
@@ -236,7 +234,7 @@ Status KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::compute(const NumericT
             partialReduceCentroids(context, partial_reduce_centroids, data, distances, assignments, partialCentroids, partialCentroidsCounters,
                                    curBlockSize, nClusters, nFeatures, nPartialCentroids, int(block == 0), &st);
             DAAL_CHECK_STATUS_VAR(st);
-            updateObjectiveFunction(context, update_objective_function, dataSq, distances, assignments, objFunction, curBlockSize, nClusters,
+            updateObjectiveFunction(context, update_objective_function, dataSq, mindistances, assignments, objFunction, curBlockSize, nClusters,
                                     int(block == 0), &st);
             DAAL_CHECK_STATUS_VAR(st);
 
@@ -314,15 +312,13 @@ Status KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::compute(const NumericT
 
         computeSquares(context, compute_squares, inCentroids, centroidsSq, nClusters, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        initDistances(context, init_distances, centroidsSq, distances, curBlockSize, nClusters, &st);
-        DAAL_CHECK_STATUS_VAR(st);
         computeDistances(context, data, inCentroids, distances, curBlockSize, nClusters, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        computeAssignments(context, compute_assignments, distances, assignments, mindistances, curBlockSize, nClusters, &st);
+        computeAssignments(context, compute_assignments, centroidsSq, distances, assignments, mindistances, curBlockSize, nClusters, &st);
         DAAL_CHECK_STATUS_VAR(st);
         computeSquares(context, compute_squares, data, dataSq, curBlockSize, nFeatures, &st);
         DAAL_CHECK_STATUS_VAR(st);
-        updateObjectiveFunction(context, update_objective_function, dataSq, distances, assignments, objFunction, curBlockSize, nClusters,
+        updateObjectiveFunction(context, update_objective_function, dataSq, mindistances, assignments, objFunction, curBlockSize, nClusters,
                                 int(block == 0), &st);
         DAAL_CHECK_STATUS_VAR(st);
         DAAL_CHECK_STATUS_VAR(st);
@@ -494,7 +490,7 @@ void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::computeDistances(Executi
 
     auto gemmStatus = BlasGpu<algorithmFPType>::xgemm(math::Layout::ColMajor, math::Transpose::Trans, math::Transpose::NoTrans, blockSize, nClusters,
                                                       nFeatures, algorithmFPType(-1.0), data, nFeatures, 0, centroids, nFeatures, 0,
-                                                      algorithmFPType(1.0), distances.get<algorithmFPType>(), blockSize, 0);
+                                                      algorithmFPType(0.0), distances.get<algorithmFPType>(), blockSize, 0);
 
     if (st != nullptr)
     {
@@ -504,18 +500,19 @@ void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::computeDistances(Executi
 
 template <typename algorithmFPType>
 void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::computeAssignments(ExecutionContextIface & context,
-                                                                           const KernelPtr & kernel_compute_assignments, UniversalBuffer & distances,
+                                                                           const KernelPtr & kernel_compute_assignments, UniversalBuffer & centroidsSq, UniversalBuffer & distances,
                                                                            const Buffer<int> & assignments, UniversalBuffer & mindistances,
                                                                            uint32_t blockSize, uint32_t nClusters, Status * st)
 {
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.computeAssignments);
 
-    KernelArguments args(5);
-    args.set(0, distances, AccessModeIds::read);
-    args.set(1, assignments, AccessModeIds::write);
-    args.set(2, mindistances, AccessModeIds::write);
-    args.set(3, blockSize);
-    args.set(4, nClusters);
+    KernelArguments args(6);
+    args.set(0, centroidsSq, AccessModeIds::read);
+    args.set(1, distances, AccessModeIds::read);
+    args.set(2, assignments, AccessModeIds::write);
+    args.set(3, mindistances, AccessModeIds::write);
+    args.set(4, blockSize);
+    args.set(5, nClusters);
 
     KernelRange local_range(1, _preferableSubGroup);
     KernelRange global_range(blockSize, _preferableSubGroup);
