@@ -91,6 +91,8 @@ private:
                                  oneapi::internal::UniversalBuffer & dataSq, oneapi::internal::UniversalBuffer & distances,
                                  const services::Buffer<int> & assignments, const services::Buffer<algorithmFPType> & objFunction, uint32_t blockSize,
                                  uint32_t nClusters, uint32_t doReset, services::Status * st);
+    void getNumEmptyClusters(oneapi::internal::ExecutionContextIface & context, const oneapi::internal::KernelPtr & kernel_empty_clusters, const oneapi::internal::UniversalBuffer & partialCentroidsCounters, 
+                    uint32_t nClusters, uint32_t nPartialCentroids, oneapi::internal::UniversalBuffer & numEmptyClusters, services::Status * st);
     uint32_t getCandidatePartNum(uint32_t nClusters);
     uint32_t getWorkgroupsCount(uint32_t rows);
     uint32_t getComputeSquaresWorkgroupsCount(uint32_t nFeatures);
