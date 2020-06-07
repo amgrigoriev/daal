@@ -424,7 +424,6 @@ DECLARE_SOURCE(
             }
             numEmpty += count > 0 ? 0 : 1;
         }
-        printf("local_id %d empty %d", local_id, numEmpty);
         numEmpty = sub_group_reduce_add(numEmpty);
         if(local_id == 0)
             numEmptyClusters[0] = numEmpty;
