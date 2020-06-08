@@ -475,7 +475,7 @@ void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::computeSquares(Execution
 }
 
 template <typename algorithmFPType>
-void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::getNumEmptyClusters(ExecutionContextIface & context, const KernelPtr & kernel_empty_clusters, const UniversalBuffer & partialCentroidsCounters, 
+void KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::getNumEmptyClusters(ExecutionContextIface & context, const KernelPtr & kernel_empty_clusters, const UniversalBuffer & partialCentroidsCounters,
                     uint32_t nClusters, uint32_t nPartialCentroids, UniversalBuffer &numEmptyClusters, Status * st)
 {
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.countEmptyClusters);
