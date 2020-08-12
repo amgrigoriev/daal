@@ -105,14 +105,14 @@ int main(int argc, char * argv[])
 
                 masterAlgorithm.input.add(kmeans::partialResults, localAlgorithm.getPartialResult());
             }
-
+            continue;
             masterAlgorithm.compute();
             masterAlgorithm.finalizeCompute();
 
             centroids         = masterAlgorithm.getResult()->get(kmeans::centroids);
             objectiveFunction = masterAlgorithm.getResult()->get(kmeans::objectiveFunction);
         }
-
+        continue;
         /* Calculate assignments */
         for (size_t i = 0; i < nBlocks; i++)
         {
