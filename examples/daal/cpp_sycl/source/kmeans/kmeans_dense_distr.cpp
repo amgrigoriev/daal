@@ -100,7 +100,7 @@ int main(int argc, char * argv[])
                 /* Set the input data to the algorithm */
                 localAlgorithm.input.set(kmeans::data, data[i]);
                 localAlgorithm.input.set(kmeans::inputCentroids, centroids);
-
+                continue;
                 localAlgorithm.compute();
 
                 masterAlgorithm.input.add(kmeans::partialResults, localAlgorithm.getPartialResult());
