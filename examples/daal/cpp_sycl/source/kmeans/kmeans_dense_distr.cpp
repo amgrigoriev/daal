@@ -88,16 +88,13 @@ int main(int argc, char * argv[])
         masterInit.compute();
         masterInit.finalizeCompute();
         centroids = masterInit.getResult()->get(kmeans::init::centroids);
-
-        /* Calculate centroids */
+/*
         for (size_t it = 0; it < nIterations; it++)
         {
             for (size_t i = 0; i < nBlocks; i++)
             {
-                /* Create an algorithm object for the K-Means algorithm */
                 kmeans::Distributed<step1Local> localAlgorithm(nClusters, false);
 
-                /* Set the input data to the algorithm */
                 localAlgorithm.input.set(kmeans::data, data[i]);
                 localAlgorithm.input.set(kmeans::inputCentroids, centroids);
                 continue;
@@ -113,13 +110,10 @@ int main(int argc, char * argv[])
             objectiveFunction = masterAlgorithm.getResult()->get(kmeans::objectiveFunction);
         }
         continue;
-        /* Calculate assignments */
         for (size_t i = 0; i < nBlocks; i++)
         {
-            /* Create an algorithm object for the K-Means algorithm */
             kmeans::Batch<> localAlgorithm(nClusters, 0);
 
-            /* Set the input data to the algorithm */
             localAlgorithm.input.set(kmeans::data, data[i]);
             localAlgorithm.input.set(kmeans::inputCentroids, centroids);
 
@@ -128,10 +122,9 @@ int main(int argc, char * argv[])
             assignments[i] = localAlgorithm.getResult()->get(kmeans::assignments);
         }
 
-        /* Print the clusterization results */
         printNumericTable(assignments[0], "First 10 cluster assignments from 1st node:", 10);
         printNumericTable(centroids, "First 10 dimensions of centroids:", 20, 10);
-        printNumericTable(objectiveFunction, "Objective function value:");
+        printNumericTable(objectiveFunction, "Objective function value:");*/
     }
 
     return 0;
