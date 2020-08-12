@@ -65,18 +65,15 @@ int main(int argc, char * argv[])
         NumericTablePtr centroids;
         NumericTablePtr assignments[nBlocks];
         NumericTablePtr objectiveFunction;
-
+/*
         kmeans::init::Distributed<step2Master, algorithmFPType, kmeans::init::randomDense> masterInit(nClusters);
         for (size_t i = 0; i < nBlocks; i++)
         {
-            /* Initialize FileDataSource<CSVFeatureManager> to retrieve the input data from a .csv file */
             FileDataSource<CSVFeatureManager> dataSource(dataFileNames[i], DataSource::doAllocateNumericTable, DataSource::doDictionaryFromContext);
 
-            /* Retrieve the data from the input file */
             dataSource.loadDataBlock();
             data[i] = dataSource.getNumericTable();
 
-            /* Create an algorithm object for the K-Means algorithm */
             kmeans::init::Distributed<step1Local, algorithmFPType, kmeans::init::randomDense> localInit(nClusters, nBlocks * nVectorsInBlock,
                                                                                                         i * nVectorsInBlock);
 
@@ -88,7 +85,7 @@ int main(int argc, char * argv[])
         masterInit.compute();
         masterInit.finalizeCompute();
         centroids = masterInit.getResult()->get(kmeans::init::centroids);
-/*
+
         for (size_t it = 0; it < nIterations; it++)
         {
             for (size_t i = 0; i < nBlocks; i++)
