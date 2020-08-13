@@ -103,7 +103,7 @@ Status KMeansDenseLloydBatchKernelUCAPI<algorithmFPType>::compute(const NumericT
 
     for (; iter < nIter; iter++)
     {
-        bool needCandidates = true;
+        bool needCandidates = false;
         for (uint32_t block = 0; block < nBlocks; block++)
         {
             auto range = Range::createFromBlock(block, blockSize, nRows);
