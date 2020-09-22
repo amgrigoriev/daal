@@ -27,6 +27,8 @@
 using namespace daal::data_management;
 using namespace daal::services::internal;
 
+const uint32_t maxInt32 = static_cast<uint32_t>(INT_MAX);
+
 namespace daal
 {
 namespace oneapi
@@ -42,6 +44,12 @@ void run_quick_select_simd(ExecutionContextIface & context, ClKernelFactoryIface
                            uint32_t vectorSize, uint32_t lastVectorSize, uint32_t vectorOffset, QuickSelectIndexed::Result & result,
                            services::Status * status)
 {
+    if (nRndSeq <= maxInt32 && vectorSize <= maxInt32 && lastVectorSize <= maxInt32 && nK <= maxInt32 && vectorOffset <= maxInt32)
+    {
+        services::internal::tryAssignStatus(status, Status(services::ErrorBufferSizeIntegerOverflow));
+        return;
+    }
+
     auto func_kernel = kernelFactory.getKernel("quick_select_group", status);
     DAAL_CHECK_STATUS_PTR(status);
 
@@ -68,12 +76,18 @@ void run_quick_select_simd(ExecutionContextIface & context, ClKernelFactoryIface
     args.set(9, vectorOffset);
 
     context.run(range, func_kernel, args, status);
+    DAAL_CHECK_STATUS_PTR(status);
 }
 
 void run_direct_select_simd(ExecutionContextIface & context, ClKernelFactoryIface & kernelFactory, const UniversalBuffer & dataVectors, uint32_t nK,
                             uint32_t nVectors, uint32_t vectorSize, uint32_t lastVectorSize, uint32_t vectorOffset,
                             QuickSelectIndexed::Result & result, services::Status * status)
 {
+    if (vectorSize <= maxInt32 && lastVectorSize <= maxInt32 && vectorOffset <= maxInt32)
+    {
+        services::internal::tryAssignStatus(status, Status(services::ErrorBufferSizeIntegerOverflow));
+        return;
+    }
     auto func_kernel = kernelFactory.getKernel("direct_select_group", status);
     DAAL_CHECK_STATUS_PTR(status);
 
@@ -104,6 +118,7 @@ void run_direct_select_simd(ExecutionContextIface & context, ClKernelFactoryIfac
     }
 
     context.run(range, func_kernel, args, status);
+    DAAL_CHECK_STATUS_PTR(status);
 }
 
 void SelectIndexed::convertIndicesToLabels(const UniversalBuffer & indices, const UniversalBuffer & labels, uint32_t nVectors, uint32_t vectorSize,
@@ -119,6 +134,7 @@ void SelectIndexed::convertIndicesToLabels(const UniversalBuffer & indices, cons
     auto index2labelsPtr = index2labels.get();
     if (!index2labelsPtr)
     {
+        services::internal::tryAssignStatus(status, Status(ErrorNullPtr));
         return;
     }
     auto outIndex = indices.template get<int>().toHost(ReadWriteMode::readWrite, &st);
@@ -130,6 +146,7 @@ void SelectIndexed::convertIndicesToLabels(const UniversalBuffer & indices, cons
     auto outIndexPtr = outIndex.get();
     if (!outIndexPtr)
     {
+        services::internal::tryAssignStatus(status, Status(ErrorNullPtr));
         return;
     }
     for (size_t vec = 0; vec < nVectors; vec++)
@@ -149,6 +166,7 @@ void QuickSelectIndexed::buildProgram(ClKernelFactoryIface & kernelFactory, cons
     services::String cachekey("__daal_oneapi_internal_qselect_indexed_");
     cachekey.add(fptype_name);
     kernelFactory.build(ExecutionTargetIds::device, cachekey.c_str(), quick_select_simd, build_options.c_str(), status);
+    DAAL_CHECK_STATUS_PTR(status);
 }
 
 SelectIndexed::Result & QuickSelectIndexed::selectIndices(const UniversalBuffer & dataVectors, const UniversalBuffer & tempIndices,
@@ -166,6 +184,7 @@ SelectIndexed::Result & QuickSelectIndexed::selectIndices(const UniversalBuffer 
 
     run_quick_select_simd(context, kernelFactory, dataVectors, tempIndices, rndSeq, nRndSeq, nK, nVectors, vectorSize, lastVectorSize, vectorOffset,
                           result, status);
+    DAAL_CHECK_STATUS_RETURN_IF_FAIL(status, result);
     return result;
 }
 
@@ -205,6 +224,7 @@ Status QuickSelectIndexed::init(Params & par)
     _rndSeq        = context.allocate(par.type, _nRndSeq, &st);
     DAAL_CHECK_STATUS_VAR(st);
     context.copy(_rndSeq, 0, (void *)&values[0], 0, _nRndSeq, &st);
+    DAAL_CHECK_STATUS_VAR(st);
     return st;
 }
 
@@ -214,17 +234,11 @@ SelectIndexed * QuickSelectIndexed::create(Params & par, daal::services::Status 
     daal::services::Status status;
     if (!ret)
     {
-        if (st)
-        {
-            *st = Status(ErrorMemoryAllocationFailed);
-        }
+        services::internal::tryAssignStatus(st, Status(ErrorMemoryAllocationFailed));
         return nullptr;
     }
     status = ret->init(par);
-    if (st)
-    {
-        *st = status;
-    }
+    services::internal::tryAssignStatus(st, status);
     if (!status.ok())
     {
         delete ret;
@@ -246,6 +260,7 @@ void DirectSelectIndexed::buildProgram(ClKernelFactoryIface & kernelFactory, con
     services::String cachekey("__daal_oneapi_internal_dselect_indexed_");
     cachekey.add(fptype_name);
     kernelFactory.build(ExecutionTargetIds::device, cachekey.c_str(), direct_select_simd, build_options.c_str(), status);
+    DAAL_CHECK_STATUS_PTR(status);
 }
 
 SelectIndexed::Result & DirectSelectIndexed::selectIndices(const UniversalBuffer & dataVectors, uint32_t nK, uint32_t nVectors, uint32_t vectorSize,
@@ -260,15 +275,16 @@ SelectIndexed::Result & DirectSelectIndexed::selectIndices(const UniversalBuffer
     DAAL_CHECK_STATUS_RETURN_IF_FAIL(status, result);
 
     run_direct_select_simd(context, kernelFactory, dataVectors, nK, nVectors, vectorSize, lastVectorSize, vectorOffset, result, status);
+    DAAL_CHECK_STATUS_RETURN_IF_FAIL(status, result);
     return result;
 }
 
 SelectIndexed * DirectSelectIndexed::create(Params & par, daal::services::Status * st)
 {
     DirectSelectIndexed * ret = new DirectSelectIndexed(par.nK);
-    if (!ret && st)
+    if (!ret)
     {
-        *st = daal::services::Status(ErrorMemoryAllocationFailed);
+        services::internal::tryAssignStatus(st, Status(ErrorMemoryAllocationFailed));
         return nullptr;
     }
     return ret;
@@ -287,10 +303,7 @@ SelectIndexed * SelectIndexedFactory::create(int nK, SelectIndexed::Params & par
         {
             return _entries[i].createMethod(par, st);
         }
-    if (st)
-    {
-        *st = daal::services::Status(ErrorMethodNotImplemented);
-    }
+    services::internal::tryAssignStatus(st, Status(ErrorMethodNotImplemented));
     return nullptr;
 }
 

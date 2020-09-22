@@ -32,6 +32,9 @@
 
 #include "src/externals/service_ittnotify.h"
 
+const size_t maxInt     = static_cast<size_t>(INT_MAX);
+const uint32_t maxInt32 = static_cast<uint32_t>(INT_MAX);
+
 namespace daal
 {
 namespace algorithms
@@ -86,18 +89,23 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::compute(const Numer
     NumericTable * labels = const_cast<NumericTable *>(model->impl()->getLabels().get());
 
     const Parameter * const parameter = static_cast<const Parameter *>(par);
-    const uint32_t k                  = parameter->k;
+    const uint32_t k                  = parameter->k; // should be <= 16k
 
-    const size_t nQueryRows  = ntData->getNumberOfRows();
-    const size_t nLabelRows  = labels->getNumberOfRows();
-    const size_t nDataRows   = points->getNumberOfRows() < nLabelRows ? points->getNumberOfRows() : nLabelRows;
-    const uint32_t nFeatures = points->getNumberOfColumns();
+    DAAL_CHECK(ntData->getNumberOfRows() <= maxInt && labels->getNumberOfRows() <= maxInt && labels->getNumberOfRows() <= maxInt
+                   && points->getNumberOfColumns() <= maxInt,
+               daal::services::ErrorIncorrectSizeOfInputNumericTable);
+
+    const uint32_t nQueryRows = ntData->getNumberOfRows();
+    const uint32_t nLabelRows = labels->getNumberOfRows();
+    const uint32_t nDataRows  = points->getNumberOfRows() < nLabelRows ? points->getNumberOfRows() : nLabelRows;
+    const uint32_t nFeatures  = points->getNumberOfColumns();
 
     // Block dimensions below are optimal for GEN9
     // Number of doubles is to 2X less against floats
     // to keep the same block size in bytes
     const uint32_t maxDataBlockRowCount  = 4096 * 4;
     const uint32_t maxQueryBlockRowCount = (2048 * 4) / sizeof(algorithmFpType);
+    DAAL_ASSERT(k <= maxDataBlockRowCount);
 
     // Maximal number of partial selections to be merged at once
     const uint32_t selectionMaxNumberOfChunks = 16;
@@ -195,10 +203,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::copyPartialDistance
     UniversalBuffer & partialLabels, uint32_t queryBlockRows, uint32_t k, uint32_t nChunk, uint32_t totalNumberOfChunks)
 {
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.copyPartialSelections);
-    if (k > static_cast<uint32_t>(INT_MAX) || totalNumberOfChunks > static_cast<uint32_t>(INT_MAX) || nChunk > static_cast<uint32_t>(INT_MAX))
-    {
-        return services::Status(services::ErrorBufferSizeIntegerOverflow);
-    }
+    DAAL_CHECK(totalNumberOfChunks <= maxInt32 && nChunk <= maxInt32, services::ErrorBufferSizeIntegerOverflow);
 
     Status st;
     auto & kernel_factory = context.getClKernelFactory();
@@ -224,6 +229,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::copyPartialDistance
     range.local(local_range, &st);
     DAAL_CHECK_STATUS_VAR(st);
     context.run(range, kernel_gather_selection, args, &st);
+    DAAL_CHECK_STATUS_VAR(st);
     return st;
 }
 
@@ -233,10 +239,8 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::scatterSumOfSquares
                                                                                  uint32_t queryBlockRowCount, UniversalBuffer & distances)
 {
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.scatterSumOfSquares);
-    if (dataBlockRowCount > static_cast<uint32_t>(INT_MAX))
-    {
-        return services::Status(services::ErrorBufferSizeIntegerOverflow);
-    }
+    DAAL_CHECK(dataBlockRowCount <= maxInt32, services::ErrorBufferSizeIntegerOverflow);
+
     Status st;
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
@@ -250,6 +254,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::scatterSumOfSquares
 
     KernelRange global_range(dataBlockRowCount, queryBlockRowCount);
     context.run(global_range, kernel_init_distances, args, &st);
+    DAAL_CHECK_STATUS_VAR(st);
     return st;
 }
 
@@ -270,10 +275,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::computeWinners(Exec
                                                                             uint32_t queryBlockRowCount, uint32_t k, UniversalBuffer labelsOut)
 {
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.computeWinners);
-    if (k > static_cast<uint32_t>(INT_MAX))
-    {
-        return services::Status(services::ErrorBufferSizeIntegerOverflow);
-    }
+
     Status st;
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
@@ -294,6 +296,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::computeWinners(Exec
     range.local(local_range, &st);
     DAAL_CHECK_STATUS_VAR(st);
     context.run(range, kernel_compute_winners, args, &st);
+    DAAL_CHECK_STATUS_VAR(st);
     return st;
 }
 
@@ -311,6 +314,7 @@ Status KNNClassificationPredictKernelUCAPI<algorithmFpType>::buildProgram(ClKern
     {
         DAAL_ITTNOTIFY_SCOPED_TASK(compute.buildProgram);
         kernel_factory.build(ExecutionTargetIds::device, cachekey.c_str(), bf_knn_cl_kernels, build_options.c_str(), &st);
+        DAAL_CHECK_STATUS_VAR(st);
     }
     return st;
 }
