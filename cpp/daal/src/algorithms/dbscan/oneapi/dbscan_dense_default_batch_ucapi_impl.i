@@ -215,14 +215,14 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     auto start = std::chrono::steady_clock::now();
     DAAL_CHECK_STATUS_VAR(getCores(data, nRows, nFeatures, par->minObservations, epsP, _isCore));
 
-    
+
 /*
     auto core = _isCore.template get<int>().toHost(ReadWriteMode::readOnly);
     for(int i = 0; i < nRows; i++)
         std::cout << "Core: " << i << " " << core.get()[i] << std::endl;
     {
          auto data_ptr = data.toHost(ReadWriteMode::readOnly).get();
-         for(int i = 0; i < nRows; i++) 
+         for(int i = 0; i < nRows; i++)
          {
              int count = 0;
             for(int j = 0; j < nRows; j++)
@@ -305,7 +305,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
 }
 
 template <typename algorithmFPType>
-services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::startNextCluster(uint32_t clusterId, uint32_t nRows, uint32_t queueEnd, const UniversalBuffer & cores, 
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::startNextCluster(uint32_t clusterId, uint32_t nRows, uint32_t queueEnd, const UniversalBuffer & cores,
                                             UniversalBuffer & clusters, UniversalBuffer lastPoint, UniversalBuffer queue, bool& found)
 {
     services::Status st;
@@ -379,8 +379,8 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCores(const Univers
     args.set(4, data, AccessModeIds::read);
     args.set(5, cores, AccessModeIds::write);
 
-    KernelRange local_range(1, nFeatures/*_maxWorkgroupSize*/);
-    KernelRange global_range(nRows, nFeatures/*_maxWorkgroupSize*/);
+    KernelRange local_range(1, nFeatures < 16 ? nFeatures : 16/*_maxWorkgroupSize*/);
+    KernelRange global_range(nRows, nFeatures < 16 ? nFeatures : 16/*_maxWorkgroupSize*/);
 
     KernelNDRange range(2);
     range.global(global_range, &st);
@@ -422,8 +422,8 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::updateQueue(uint32_t c
     args.set(9, queue, AccessModeIds::write);
     args.set(10, queueFront, AccessModeIds::write);
 
-    KernelRange local_range(1, nFeatures/*_maxWorkgroupSize*/);
-    KernelRange global_range(nRows, nFeatures/*_maxWorkgroupSize*/);
+    KernelRange local_range(1, nFeatures < 16 ? nFeatures : 16/*>_maxWorkgroupSize*/);
+    KernelRange global_range(nRows, nFeatures < 16 ? nFeatures : 16/*_maxWorkgroupSize*/);
 
     KernelNDRange range(2);
     range.global(global_range, &st);
