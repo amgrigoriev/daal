@@ -185,6 +185,119 @@ DECLARE_SOURCE(
         }
     }
 
+    __kernel void compute_cores(int num_points, int num_features, int num_nbrs, algorithmFPType eps, 
+                                __global const algorithmFPType * points, __global int * cores) 
+    {
+        const int global_id = get_global_id(0);
+        if (get_sub_group_id() > 0) return;
+
+        const int subgroup_size = get_sub_group_size();
+        const int local_id      = get_sub_group_local_id();
+        if(local_id == 0 && global_id == 0)
+            printf("Input: %d %d %d %d\n", num_points, num_features, num_nbrs, subgroup_size);
+        int count = 0;
+        for(int j = 0; j < num_points; j++) 
+        {
+            algorithmFPType sum = 0.0;
+            for (int i = local_id; i < num_features; i += subgroup_size)
+            {
+                algorithmFPType val = points[global_id * num_features + i] - points[j * num_features + i];
+//                if(global_id == 0 && local_id == 0)
+//                    printf("OrgVal: %d %15.8f\n", j, val);
+                val *= val;
+                sum += val;
+//                if(global_id == 0 && local_id == 0)
+//                    printf("Val: %d %15.13f %15.13f\n", j, val, sum);
+            }
+//            if(global_id == 0 && local_id == 0)
+//                    printf("Final sum: %d %15.13f\n", j, sum);
+            algorithmFPType cur_nbr_distance = sub_group_reduce_add(sum);
+            int incr = (int)(cur_nbr_distance <= eps);
+            count += incr;
+//            if(global_id == 0 && local_id == 0) 
+//                printf("Increase: %d %d %d %15.13f %15.13f %d\n", global_id, local_id, j, cur_nbr_distance, eps, incr);
+        }
+        if (local_id == 0)
+        {
+//            printf("Count: %d %d\n", global_id, count);
+            cores[global_id] = (int)(count >= num_nbrs);
+        }
+    }
+
+    __kernel void startNextCluster(int cluster_id, int num_points, int queue_end, const __global int * cores, 
+                                   __global int * clusters, __global int * last_point, __global int * queue) 
+    {
+        if(get_sub_group_id() > 0)
+            return;
+
+        const int subgroup_size = get_sub_group_size();
+        const int local_id      = get_sub_group_local_id();
+        int start = last_point[0];
+        for(int i = start + local_id; i < num_points; i++)
+        {
+            bool found = cores[i] == 1 && clusters[i] == -2;
+            int index = sub_group_reduce_min(found ? i : num_points);
+            if(index < num_points) 
+            {
+                if (local_id == 0) 
+                {
+                    clusters[index] = cluster_id;
+                    last_point[0] = index + 1;
+                    queue[queue_end] = index;
+                }
+                break;
+            }
+        }
+    }
+
+    __kernel void update_queue(int cluster_id, int num_points, int num_features, algorithmFPType eps, int queue_start, int queue_end, 
+                                const __global algorithmFPType * points, __global int * cores, 
+                                __global int * clusters, __global int * queue, 
+                                __global int * queue_front) 
+    {
+        const int subgroup_index = get_global_id(0);
+        if (get_sub_group_id() > 0) return;
+        const int local_id      = get_sub_group_local_id();
+//        if(local_id == 0)
+//            printf("Cluster: %d %d \n", subgroup_index, clusters[subgroup_index]);
+        if(clusters[subgroup_index] > -1) return;
+        const int subgroup_size = get_sub_group_size();
+        volatile __global int* counterPtr = queue_front;
+        for(int j = queue_start; j < queue_end; j++) 
+        {
+            int index = queue[j];
+//            if(local_id == 0)
+//                printf("queue index: %d\n", index);
+            algorithmFPType sum = 0.0;
+            for (int i = local_id; i < num_features; i += subgroup_size)
+            {
+                algorithmFPType val = points[subgroup_index * num_features + i] - points[index * num_features + i];
+                sum += val * val;
+            }
+            algorithmFPType distance = sub_group_reduce_add(sum);
+            if(distance > eps)
+                continue;
+//            if(local_id == 0)
+//                printf("Neghbor found\n");
+            if(local_id == 0) 
+            {
+                clusters[subgroup_index] = cluster_id;
+            }
+            if(cores[subgroup_index] == 0)
+                continue;
+//            if(local_id == 0)
+//                printf("Neghbor is core\n");
+            if(local_id == 0) 
+            {
+                int queue_index = atomic_inc(counterPtr);
+//                printf("queue front: %d %d %d %d\n", queue_index, subgroup_index, clusters[subgroup_index], cores[subgroup_index]);
+                queue[queue_index] = subgroup_index;
+            }
+            break;
+        }
+    }
+
+
 );
 
 #endif

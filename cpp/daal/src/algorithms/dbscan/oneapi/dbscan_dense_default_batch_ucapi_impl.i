@@ -26,6 +26,9 @@
 #include "src/algorithms/dbscan/oneapi/cl_kernels/dbscan_cl_kernels.cl"
 #include "src/externals/service_ittnotify.h"
 
+#include <iostream>
+#include <chrono>
+
 using namespace daal::services;
 using namespace daal::oneapi::internal;
 using namespace daal::data_management;
@@ -209,63 +212,227 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     uint32_t queueBegin = 0;
     uint32_t queueEnd   = 0;
 
-    for (uint32_t i = 0; i < nRows; i++)
+    auto start = std::chrono::steady_clock::now();
+    DAAL_CHECK_STATUS_VAR(getCores(data, nRows, nFeatures, par->minObservations, epsP, _isCore));
+
+    
+/*
+    auto core = _isCore.template get<int>().toHost(ReadWriteMode::readOnly);
+    for(int i = 0; i < nRows; i++)
+        std::cout << "Core: " << i << " " << core.get()[i] << std::endl;
     {
-        bool canQuery = canQueryRow(assignments, i, &s);
-        DAAL_CHECK_STATUS_VAR(s);
-        if (!canQuery)
-        {
-            continue;
-        }
-        DAAL_CHECK_STATUS_VAR(getPointDistances(data, nRows, i, nFeatures, minkowskiPower, _singlePointDistances));
-        DAAL_CHECK_STATUS_VAR(
-            countPointNeighbors(assignments, _singlePointDistances, i, -1, nRows, epsP, _queue, _countersTotal, _countersNewNeighbors));
-        uint32_t numTotalNeighbors = sumCounters(_countersTotal);
-        uint32_t numNewNeighbors   = sumCounters(_countersNewNeighbors);
-        if (numTotalNeighbors < par->minObservations)
-        {
-            DAAL_CHECK_STATUS_VAR(setBufferValue(assignments, i, noise));
-            continue;
-        }
-        nClusters++;
-        DAAL_CHECK_STATUS_VAR(setBufferValue(_isCore, i, 1));
-        DAAL_CHECK_STATUS_VAR(countOffsets(_countersNewNeighbors, _chunkOffsets));
-        DAAL_CHECK_STATUS_VAR(
-            pushNeighborsToQueue(_singlePointDistances, _chunkOffsets, i, nClusters - 1, -1, nRows, queueEnd, epsP, assignments, _queue));
-        queueEnd += numNewNeighbors;
-        while (queueBegin < queueEnd)
-        {
-            uint32_t curQueueBlockSize = computeQueueBlockSize(queueBegin, queueEnd);
-            getQueueBlockDistances(data, nRows, _queue, queueBegin, curQueueBlockSize, nFeatures, minkowskiPower, _queueBlockDistances);
-            for (uint32_t j = 0; j < curQueueBlockSize; j++)
+         auto data_ptr = data.toHost(ReadWriteMode::readOnly).get();
+         for(int i = 0; i < nRows; i++) 
+         {
+             int count = 0;
+            for(int j = 0; j < nRows; j++)
             {
-                countPointNeighbors(assignments, _queueBlockDistances, queueBegin + j, nRows * j, nRows, epsP, _queue, _countersTotal,
-                                    _countersNewNeighbors);
-                uint32_t curTotalNeighbors = sumCounters(_countersTotal);
-                uint32_t curNewNeighbors   = sumCounters(_countersNewNeighbors);
-                setBufferValueByQueueIndex(assignments, _queue, queueBegin + j, nClusters - 1);
-                if (curTotalNeighbors < par->minObservations)
+                algorithmFPType sum = 0.0;
+                for(int k = 0; k < nFeatures; k++)
                 {
-                    continue;
+                    algorithmFPType val = data_ptr[i * nFeatures + k] - data_ptr[j * nFeatures + k];
+                    sum += val * val;
                 }
-                setBufferValueByQueueIndex(_isCore, _queue, queueBegin + j, 1);
-                countOffsets(_countersNewNeighbors, _chunkOffsets);
-                pushNeighborsToQueue(_queueBlockDistances, _chunkOffsets, queueBegin + j, nClusters - 1, nRows * j, nRows, queueEnd, epsP,
-                                     assignments, _queue);
-                queueEnd += curNewNeighbors;
+                if(sum <= epsP)
+                    count++;
             }
-            queueBegin += curQueueBlockSize;
+//            std::cout << "CPU count: " << i << " " << count << std::endl;
+            std::cout << "CPU core: " << i << " " << (count >= par->minObservations) << std::endl;
+         }
+
+    }*/
+    auto lastPoint = context.allocate(TypeIds::id<int>(), 1, &s);
+    DAAL_CHECK_STATUS_VAR(s);
+    auto queueFront = context.allocate(TypeIds::id<int>(), 1, &s);
+    DAAL_CHECK_STATUS_VAR(s);
+    {
+        auto val = lastPoint.template get<int>().toHost(ReadWriteMode::writeOnly);
+        val.get()[0] = 0;
+    }
+    bool doIt = false;
+    DAAL_CHECK_STATUS_VAR(startNextCluster(nClusters, nRows, queueEnd, _isCore, assignments, lastPoint, _queue, doIt));
+    {
+        auto val = lastPoint.template get<int>().toHost(ReadWriteMode::readOnly);
+//        std::cout << "First last point: " << val.get()[0] << std::endl;
+    }
+    while(doIt) {
+        nClusters++;
+//        std::cout << "Clusters: " << nClusters << std::endl;
+        queueEnd++;
+        {
+            auto val = queueFront.template get<int>().toHost(ReadWriteMode::writeOnly);
+            val.get()[0] = queueEnd;
+        }
+        while(queueBegin < queueEnd) {
+//            std::cout << "QueuePos: " << queueBegin << " " << queueEnd << std::endl;
+            updateQueue(nClusters - 1, nRows, nFeatures, epsP, queueBegin, queueEnd, data, _isCore, assignments, _queue, queueFront);
+            int oldBegin = queueBegin;
+            queueBegin = queueEnd;
+            {
+                auto val = queueFront.template get<int>().toHost(ReadWriteMode::readOnly);
+                queueEnd = val.get()[0];
+                auto queue_host = _queue.template get<int>().toHost(ReadWriteMode::readOnly);
+                auto cluster_host = assignments.template get<int>().toHost(ReadWriteMode::readOnly);
+                auto core_host = _isCore.template get<int>().toHost(ReadWriteMode::readOnly);
+                for(int i = queueBegin; i < queueEnd; i++)
+                {
+                    int ind = queue_host.get()[i];
+//                    std::cout << "Queue: " << i << " " << ind << " " << cluster_host.get()[ind] << " " << core_host.get()[ind] << std::endl;
+                }
+            }
+//            std::cout << "Queue front: " << queueEnd << std::endl;
+        }
+        {
+            auto val = lastPoint.template get<int>().toHost(ReadWriteMode::readOnly);
+//            std::cout << "Last before: " << val.get()[0] << std::endl;
+        }
+        DAAL_CHECK_STATUS_VAR(startNextCluster(nClusters, nRows, queueEnd, _isCore, assignments, lastPoint, _queue, doIt));
+        {
+            auto val = lastPoint.template get<int>().toHost(ReadWriteMode::readOnly);
+//            std::cout << "Last after: " << val.get()[0] << std::endl;
+//            std::cout << "doIt: " << doIt << std::endl;
         }
     }
-    ntData->releaseBlockOfRows(dataRows);
-    BlockDescriptor<int> nClustersRows;
-    DAAL_CHECK_STATUS_VAR(ntNClusters->getBlockOfRows(0, 1, writeOnly, nClustersRows));
-    nClustersRows.getBuffer().toHost(ReadWriteMode::writeOnly).get()[0] = nClusters;
-    if (par->resultsToCompute & (computeCoreIndices | computeCoreObservations))
+    auto total = std::chrono::steady_clock::now();
+    size_t t = std::chrono::duration_cast<std::chrono::milliseconds>(total-start).count();
+    std::cout << "Total: " << t << " msec" << std::endl;
     {
-        DAAL_CHECK_STATUS_VAR(processResultsToCompute(par->resultsToCompute, ntData, ntCoreIndices, ntCoreObservations));
+        BlockDescriptor<int> nClustersRows;
+        DAAL_CHECK_STATUS_VAR(ntNClusters->getBlockOfRows(0, 1, writeOnly, nClustersRows));
+        nClustersRows.getBuffer().toHost(ReadWriteMode::writeOnly).get()[0] = nClusters;
     }
     return s;
+}
+
+template <typename algorithmFPType>
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::startNextCluster(uint32_t clusterId, uint32_t nRows, uint32_t queueEnd, const UniversalBuffer & cores, 
+                                            UniversalBuffer & clusters, UniversalBuffer lastPoint, UniversalBuffer queue, bool& found)
+{
+    services::Status st;
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.startNextCluster);
+    auto & context        = Environment::getInstance()->getDefaultExecutionContext();
+    auto & kernel_factory = context.getClKernelFactory();
+    DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
+    auto kernel = kernel_factory.getKernel("startNextCluster", &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    auto start = std::chrono::steady_clock::now();
+
+    int last;
+    {
+        last = lastPoint.template get<int>().toHost(ReadWriteMode::readOnly).get()[0];
+    }
+
+    KernelArguments args(7);
+    args.set(0, clusterId);
+    args.set(1, nRows);
+    args.set(2, queueEnd);
+    args.set(3, cores, AccessModeIds::read);
+    args.set(4, clusters, AccessModeIds::write);
+    args.set(5, lastPoint, AccessModeIds::write);
+    args.set(6, queue, AccessModeIds::write);
+
+    KernelRange local_range(1, _maxWorkgroupSize);
+    KernelRange global_range(1, _maxWorkgroupSize);
+
+    KernelNDRange range(2);
+    range.global(global_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+    range.local(local_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    context.run(range, kernel, args, &st);
+    int new_last;
+    {
+        new_last = lastPoint.template get<int>().toHost(ReadWriteMode::readOnly).get()[0];
+//        std::cout << "Last: " << last << " " << new_last << std::endl;
+        found = new_last > last;
+    }
+    auto total = std::chrono::steady_clock::now();
+    size_t t = std::chrono::duration_cast<std::chrono::milliseconds>(total-start).count();
+    return st;
+}
+
+
+template <typename algorithmFPType>
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCores(const UniversalBuffer & data, uint32_t nRows,
+                                                                   uint32_t nFeatures, uint32_t nNbrs, algorithmFPType eps,
+                                                                   UniversalBuffer & cores)
+{
+    services::Status st;
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCores);
+    auto & context        = Environment::getInstance()->getDefaultExecutionContext();
+    auto & kernel_factory = context.getClKernelFactory();
+    DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
+    auto kernel = kernel_factory.getKernel("compute_cores", &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    auto start = std::chrono::steady_clock::now();
+
+//    std::cout << "Params: " << nNbrs << " " << eps << std::endl;
+
+    KernelArguments args(6);
+    args.set(0, nRows);
+    args.set(1, nFeatures);
+    args.set(2, nNbrs);
+    args.set(3, eps);
+    args.set(4, data, AccessModeIds::read);
+    args.set(5, cores, AccessModeIds::write);
+
+    KernelRange local_range(1, nFeatures/*_maxWorkgroupSize*/);
+    KernelRange global_range(nRows, nFeatures/*_maxWorkgroupSize*/);
+
+    KernelNDRange range(2);
+    range.global(global_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+    range.local(local_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    context.run(range, kernel, args, &st);
+    auto total = std::chrono::steady_clock::now();
+    size_t t = std::chrono::duration_cast<std::chrono::milliseconds>(total-start).count();
+//    std::cout << "getCores: " << t << " msec" << std::endl;
+    return st;
+}
+
+template <typename algorithmFPType>
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::updateQueue(uint32_t clusterId, uint32_t nRows, uint32_t nFeatures, algorithmFPType eps,
+                                uint32_t queueBegin, uint32_t queueEnd, const UniversalBuffer & data, UniversalBuffer & cores, UniversalBuffer & clusters,
+                                UniversalBuffer & queue, UniversalBuffer &queueFront)
+{
+//    std::cout << "Calling update_queue" << std::endl;
+    services::Status st;
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.updateQueue);
+    auto & context        = Environment::getInstance()->getDefaultExecutionContext();
+    auto & kernel_factory = context.getClKernelFactory();
+    DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
+    auto kernel = kernel_factory.getKernel("update_queue", &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    KernelArguments args(11);
+    args.set(0, clusterId);
+    args.set(1, nRows);
+    args.set(2, nFeatures);
+    args.set(3, eps);
+    args.set(4, queueBegin);
+    args.set(5, queueEnd);
+    args.set(6, data, AccessModeIds::read);
+    args.set(7, cores, AccessModeIds::read);
+    args.set(8, clusters, AccessModeIds::write);
+    args.set(9, queue, AccessModeIds::write);
+    args.set(10, queueFront, AccessModeIds::write);
+
+    KernelRange local_range(1, nFeatures/*_maxWorkgroupSize*/);
+    KernelRange global_range(nRows, nFeatures/*_maxWorkgroupSize*/);
+
+    KernelNDRange range(2);
+    range.global(global_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+    range.local(local_range, &st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    context.run(range, kernel, args, &st);
+    return st;
 }
 
 template <typename algorithmFPType>
