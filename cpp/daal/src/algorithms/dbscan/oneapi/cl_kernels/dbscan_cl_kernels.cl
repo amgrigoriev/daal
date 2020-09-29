@@ -185,6 +185,48 @@ DECLARE_SOURCE(
         }
     }
 
+    __kernel void compute_cores_ex(int num_points, int num_features, int num_nbrs, algorithmFPType eps, 
+                                   __global const algorithmFPType * points, __global int * cores) 
+    {
+        __local algorithmFPType buffer[8000];
+        const int num = 8000 / num_features;
+        const int global_id = get_global_id(0);
+        const int local_size = get_local_size(1);
+        const int index = global_id * local_size + get_local_id(1);
+/*        const int subgroup_id = get_sub_group_id();
+        const int subgroup_size = get_sub_group_size();
+        const int local_id      = get_sub_group_local_id();
+        const int num_sub_groups = get_num_sub_groups();
+        if(local_id == 0)
+            printf("item: %d %d %d %d\n", global_id, subgroup_id, num_sub_groups, subgroup_size);
+        */
+        int total = 0;
+        int count = 0;
+        while(total < num_points) {
+            int cur_size = num_points - total;
+            cur_size = cur_size > num ? num : cur_size;
+            event_t e = async_work_group_copy(buffer, points + total * num_features, cur_size * num_features, 0);
+            wait_group_events(1, &e);
+            total += cur_size;
+            if(index < num_points) 
+            {
+                for(int j = 0; j < cur_size; j++) 
+                {
+                    algorithmFPType sum = 0.0;
+                    for (int i = 0; i < num_features; i++)
+                    {
+                        algorithmFPType val = points[index * num_features + i] - buffer[j * num_features + i];
+                        val *= val;
+                        sum += val;
+                    }
+                    int incr = (int)(sum <= eps);
+                    count += incr;
+                }
+            }
+        }
+        cores[index] = (int)(count >= num_nbrs);
+    }
+
     __kernel void compute_cores(int num_points, int num_features, int num_nbrs, algorithmFPType eps, 
                                 __global const algorithmFPType * points, __global int * cores) 
     {
@@ -193,8 +235,8 @@ DECLARE_SOURCE(
 
         const int subgroup_size = get_sub_group_size();
         const int local_id      = get_sub_group_local_id();
-        if(local_id == 0 && global_id == 0)
-            printf("Input: %d %d %d %d\n", num_points, num_features, num_nbrs, subgroup_size);
+//        if(local_id == 0 && global_id == 0)
+//            printf("Input: %d %d %d %d\n", num_points, num_features, num_nbrs, subgroup_size);
         int count = 0;
         for(int j = 0; j < num_points; j++) 
         {

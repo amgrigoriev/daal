@@ -364,7 +364,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCores(const Univers
     auto & context        = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
     DAAL_CHECK_STATUS_VAR(buildProgram(kernel_factory));
-    auto kernel = kernel_factory.getKernel("compute_cores", &st);
+    auto kernel = kernel_factory.getKernel("compute_cores_ex", &st);
     DAAL_CHECK_STATUS_VAR(st);
 
     auto start = std::chrono::steady_clock::now();
@@ -379,8 +379,8 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCores(const Univers
     args.set(4, data, AccessModeIds::read);
     args.set(5, cores, AccessModeIds::write);
 
-    KernelRange local_range(1, nFeatures < 16 ? nFeatures : 16/*_maxWorkgroupSize*/);
-    KernelRange global_range(nRows, nFeatures < 16 ? nFeatures : 16/*_maxWorkgroupSize*/);
+    KernelRange local_range(1, 256/*_maxWorkgroupSize*/);
+    KernelRange global_range(nRows, 256/*_maxWorkgroupSize*/);
 
     KernelNDRange range(2);
     range.global(global_range, &st);
