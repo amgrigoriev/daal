@@ -135,7 +135,7 @@ public:
 private:
     static services::Status reduceResults(services::internal::Buffer<algorithmFPType> & dst, size_t dstOffset, size_t dstStride,
                                           const services::internal::Buffer<algorithmFPType> & src, size_t srcOffset, size_t srcStride, size_t count);
-    static services::Status bufferAdd(size_t count, const services::internal::sycl::UniversalBuffer & src, 
+    static services::Status bufferAdd(size_t count, const services::internal::sycl::UniversalBuffer & src,
                                       services::internal::Buffer<algorithmFPType> & dst);
 };
 

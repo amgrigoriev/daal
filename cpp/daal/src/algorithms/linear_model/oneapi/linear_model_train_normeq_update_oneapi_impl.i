@@ -210,7 +210,7 @@ services::Status UpdateKernelOneAPI<algorithmFPType>::reduceResults(services::in
 }
 
 template <typename algorithmFPType>
-services::Status UpdateKernelOneAPI<algorithmFPType>::bufferAdd(size_t count, const UniversalBuffer & src, 
+services::Status UpdateKernelOneAPI<algorithmFPType>::bufferAdd(size_t count, const UniversalBuffer & src,
                                                                 services::internal::Buffer<algorithmFPType> & dst)
 {
     services::Status status;
