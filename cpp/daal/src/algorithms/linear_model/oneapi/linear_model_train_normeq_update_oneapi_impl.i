@@ -23,6 +23,7 @@
 
 #include "src/algorithms/linear_model/oneapi/linear_model_train_normeq_kernel_oneapi.h"
 #include "src/sycl/blas_gpu.h"
+#include "src/sycl/reducer.h"
 #include "services/internal/execution_context.h"
 #include "src/externals/service_ittnotify.h"
 #include "src/algorithms/linear_model/oneapi/cl_kernel/reduce_results.cl"
@@ -144,18 +145,16 @@ services::Status UpdateKernelOneAPI<algorithmFPType>::compute(NumericTable & xTa
             {
                 DAAL_ITTNOTIFY_SCOPED_TASK(computeUpdate.gemm1X);
                 /* Compute reduce X in columns for each block and reduce it to final result*/
-                status = BlasGpu<algorithmFPType>::xgemm(math::Layout::RowMajor, math::Transpose::NoTrans, math::Transpose::NoTrans, 1, xNCols,
-                                                         xNRows, algorithmFPType(1.0), onesBuf, nRowsPerBlock, 0, xBuf, xNCols, 0,
-                                                         algorithmFPType(1.0), sumXBuf, xNCols, 0);
+                auto xRes = math::SumReducer::sum(math::Layout::ColMajor, xBuf, xNCols, xNRows, &status).sum;
+                bufferAdd(xNCols, xRes, sumXBuf);
             }
             DAAL_CHECK_STATUS_VAR(status);
 
             {
                 DAAL_ITTNOTIFY_SCOPED_TASK(computeUpdate.gemm1Y);
                 /* Compute reduce Y in columns for each block and reduce it to final result*/
-                status = BlasGpu<algorithmFPType>::xgemm(math::Layout::RowMajor, math::Transpose::NoTrans, math::Transpose::NoTrans, 1, yNCols,
-                                                         xNRows, algorithmFPType(1.0), onesBuf, nRowsPerBlock, 0, yBuf, yNCols, 0,
-                                                         algorithmFPType(1.0), sumYBuf, yNCols, 0);
+                auto yRes = math::SumReducer::sum(math::Layout::ColMajor, yBuf, yNCols, xNRows, &status).sum;
+                bufferAdd(yNCols, yRes, sumYBuf);
             }
             DAAL_CHECK_STATUS_VAR(status);
         }
@@ -174,7 +173,6 @@ services::Status UpdateKernelOneAPI<algorithmFPType>::compute(NumericTable & xTa
 
         DAAL_CHECK_STATUS(status, reduceResults(xtyBuff, nCols, nBetasIntercept, sumYBuf, 0, 1, nResponses));
     }
-
     return status;
 }
 
@@ -203,6 +201,34 @@ services::Status UpdateKernelOneAPI<algorithmFPType>::reduceResults(services::in
     args.set(3, src, AccessModeIds::read);
     args.set(4, srcOffset);
     args.set(5, srcStride);
+
+    KernelRange range(count);
+
+    ctx.run(range, kernel, args, &status);
+
+    return status;
+}
+
+template <typename algorithmFPType>
+services::Status UpdateKernelOneAPI<algorithmFPType>::bufferAdd(size_t count, const UniversalBuffer & src, 
+                                                                services::internal::Buffer<algorithmFPType> & dst)
+{
+    services::Status status;
+
+    ExecutionContextIface & ctx    = services::internal::getDefaultContext();
+    ClKernelFactoryIface & factory = ctx.getClKernelFactory();
+
+    const services::String options = getKeyFPType<algorithmFPType>();
+    services::String cachekey("__daal_algorithms_linear_model_copy_");
+    cachekey.add(options);
+    factory.build(ExecutionTargetIds::device, cachekey.c_str(), clKernelCopy, options.c_str());
+
+    const char * const kernelName = "bufferAdd";
+    KernelPtr kernel              = factory.getKernel(kernelName);
+
+    KernelArguments args(2);
+    args.set(0, src, AccessModeIds::read);
+    args.set(1, dst, AccessModeIds::readwrite);
 
     KernelRange range(count);
 

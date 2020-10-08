@@ -38,6 +38,12 @@ DECLARE_SOURCE(
         dst[dstStride * valIdx + dstOffset] += src[srcStride * valIdx + srcOffset];
     }
 
+    __kernel void bufferAdd(const __global algorithmFPType * src, __global algorithmFPType * dst) {
+        const int valIdx = get_global_id(0);
+
+        dst[valIdx] += src[valIdx];
+    }
+
 );
 
 #endif // __REDUCE_RESULTS_CL__
