@@ -511,7 +511,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::buildProgramSlm(ClKernelFactoryI
 {
     Status st;
     const auto fptypeName   = services::internal::sycl::getKeyFPType<algorithmFPType>();
- 
+
     auto buildOptions = fptypeName;
     buildOptions.add(getBuildOptions(xSize, ySize));
 
