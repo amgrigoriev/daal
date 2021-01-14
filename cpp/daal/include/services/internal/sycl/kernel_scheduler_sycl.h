@@ -257,7 +257,8 @@ private:
 
         err = clBuildProgram(get(), 1, &clDevice, options, nullptr, nullptr);
 
-        DAAL_ASSERT_DECL(if (err == CL_BUILD_PROGRAM_FAILURE) {
+//        DAAL_ASSERT_DECL(
+        if (err == CL_BUILD_PROGRAM_FAILURE) {
             size_t logLen = 0;
             clGetProgramBuildInfo(get(), clDevice, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logLen);
             String buildLog(logLen);
@@ -266,7 +267,8 @@ private:
                 clGetProgramBuildInfo(get(), clDevice, CL_PROGRAM_BUILD_LOG, logLen, (void *)(buildLog.c_str()), nullptr);
                 fprintf(stderr, "Failed to build OpenCL program (%d):\n%s", err, buildLog.c_str());
             }
-        })
+        }
+//        )
 
         DAAL_CHECK_OPENCL(err, status)
     }

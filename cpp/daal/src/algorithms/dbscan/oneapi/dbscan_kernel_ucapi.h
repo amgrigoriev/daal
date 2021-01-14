@@ -48,6 +48,8 @@ public:
 private:
     services::Status getCores(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
                               algorithmFPType eps);
+    services::Status getCoresSlm(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
+                              algorithmFPType eps);
     services::Status getCoresWithWeights(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures,
                                          algorithmFPType nNbrs, algorithmFPType eps);
     services::Status updateQueue(uint32_t clusterId, uint32_t nRows, uint32_t nFeatures, algorithmFPType eps, uint32_t queueBegin, uint32_t queueEnd,
@@ -60,6 +62,8 @@ private:
                                              daal::data_management::NumericTable * ntCoreObservations);
     services::Status initializeBuffers(uint32_t nRows, daal::data_management::NumericTable * weights);
     services::Status buildProgram(services::internal::sycl::ClKernelFactoryIface & kernel_factory);
+    services::Status buildProgramSlm(services::internal::sycl::ClKernelFactoryIface & kernel_factory, uint32_t xSize, uint32_t ySize);
+    services::String getBuildOptions(uint32_t xSize, uint32_t ySize);
     services::Status setQueueFront(uint32_t queueEnd);
     services::Status getQueueFront(uint32_t & queueEnd);
 
