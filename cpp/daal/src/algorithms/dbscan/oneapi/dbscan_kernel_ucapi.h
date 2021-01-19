@@ -50,6 +50,10 @@ private:
                               algorithmFPType eps);
     services::Status getCoresSlm(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
                               algorithmFPType eps);
+    services::Status getCoresSlm2(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
+                              algorithmFPType eps);
+    services::Status getCoresSlm16x16(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
+                              algorithmFPType eps);
     services::Status getCoresWithWeights(const services::internal::sycl::UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures,
                                          algorithmFPType nNbrs, algorithmFPType eps);
     services::Status updateQueue(uint32_t clusterId, uint32_t nRows, uint32_t nFeatures, algorithmFPType eps, uint32_t queueBegin, uint32_t queueEnd,

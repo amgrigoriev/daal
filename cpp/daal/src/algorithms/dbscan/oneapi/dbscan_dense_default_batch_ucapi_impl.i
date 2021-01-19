@@ -53,12 +53,19 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::initializeBuffers(uint
     _queue         = context.allocate(TypeIds::id<int>(), nRows, s);
     DAAL_CHECK_STATUS_VAR(s);
     _isCore = context.allocate(TypeIds::id<int>(), nRows, s);
+    auto core = _isCore.template get<int>().toHost(ReadWriteMode::writeOnly, s);
     DAAL_CHECK_STATUS_VAR(s);
-    context.fill(_isCore, 0, s);
+    for(int i = 0; i < nRows; i++)
+        core.get()[i] = 0;
+    DAAL_CHECK_STATUS_VAR(s);
+//    context.fill(_isCore, 0, s);
     DAAL_CHECK_STATUS_VAR(s);
     _lastPoint = context.allocate(TypeIds::id<int>(), 1, s);
     DAAL_CHECK_STATUS_VAR(s);
-    context.fill(_lastPoint, 0, s);
+    auto last = _lastPoint.template get<int>().toHost(ReadWriteMode::writeOnly, s);
+    DAAL_CHECK_STATUS_VAR(s);
+    last.get()[0] = 0;
+//    context.fill(_lastPoint, 0, s);
     DAAL_CHECK_STATUS_VAR(s);
     _queueFront = context.allocate(TypeIds::id<int>(), 1, s);
     DAAL_CHECK_STATUS_VAR(s);
@@ -219,7 +226,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::compute(const NumericTable * x, 
     }
     else
     {
-        DAAL_CHECK_STATUS_VAR(getCoresSlm(data, nRows, nFeatures, par->minObservations, epsP));
+        DAAL_CHECK_STATUS_VAR(getCoresSlm16x16(data, nRows, nFeatures, par->minObservations, epsP));
 //        exit(0);
     }
 
@@ -355,9 +362,10 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm(const Univ
     services::Status st;
     DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm);
 
-    const int slmFpSize = (1024 * 1024 * 64  - 32 * sizeof(int)) / sizeof(algorithmFPType) / 2;
+    const int slmFpSize = (1024 * 64  - 32 * sizeof(int)) / sizeof(algorithmFPType) / 2;
+    std::cout << "slmFpSize: " << slmFpSize << std::endl;
     int blockSize = slmFpSize / nFeatures;
-    if(blockSize > 32) blockSize = 16;
+    if(blockSize > 16) blockSize = 16;
     std::cout << "blockSize: " << blockSize << std::endl;
 
     auto & context        = Environment::getInstance()->getDefaultExecutionContext();
@@ -385,6 +393,96 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm(const Univ
     std::cout << "Size set: " << rowBlocks << " x " << rangeWidth << std::endl;
     KernelRange localRange(1, rangeWidth);
     KernelRange globalRange(rowBlocks, rangeWidth);
+
+    KernelNDRange range(2);
+    range.global(globalRange, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    range.local(localRange, st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    std::cout << "Before run" << std::endl;
+    context.run(range, kernel, args, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    return st;
+}
+
+template <typename algorithmFPType>
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm2(const UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
+                                                                   algorithmFPType eps)
+{
+    services::Status st;
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm);
+
+    const int slmFpSize = (1024 * 64  - 32 * sizeof(int)) / sizeof(algorithmFPType) / 2;
+    int blockSize = slmFpSize / nFeatures;
+    if(blockSize > 16) blockSize = 16;
+
+    auto & context        = Environment::getInstance()->getDefaultExecutionContext();
+    auto & kernel_factory = context.getClKernelFactory();
+    DAAL_CHECK_STATUS_VAR(buildProgramSlm(kernel_factory, blockSize * nFeatures, blockSize * nFeatures));
+    auto kernel = kernel_factory.getKernel("computeCoresSlm2", st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    DAAL_ASSERT_UNIVERSAL_BUFFER(data, algorithmFPType, nRows * nFeatures);
+    DAAL_ASSERT_UNIVERSAL_BUFFER(_weights, algorithmFPType, _useWeights ? nRows : 1);
+    DAAL_ASSERT_UNIVERSAL_BUFFER(_isCore, int, nRows);
+
+    KernelArguments args(6, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    args.set(0, static_cast<int32_t>(nRows));
+    args.set(1, static_cast<int32_t>(nFeatures));
+    args.set(2, nNbrs);
+    args.set(3, eps);
+    args.set(4, data, AccessModeIds::read);
+    args.set(5, _isCore, AccessModeIds::write);
+
+    const uint32_t rowBlocks = nRows /  blockSize + (int)((bool)(nRows % blockSize));
+    KernelRange localRange(1, 16);
+    KernelRange globalRange(rowBlocks, 16);
+
+    KernelNDRange range(2);
+    range.global(globalRange, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    range.local(localRange, st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    std::cout << "Before run" << std::endl;
+    context.run(range, kernel, args, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    return st;
+}
+
+template <typename algorithmFPType>
+services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm16x16(const UniversalBuffer & data, uint32_t nRows, uint32_t nFeatures, int nNbrs,
+                                                                   algorithmFPType eps)
+{
+    services::Status st;
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm);
+
+    auto & context        = Environment::getInstance()->getDefaultExecutionContext();
+    auto & kernel_factory = context.getClKernelFactory();
+    DAAL_CHECK_STATUS_VAR(buildProgramSlm(kernel_factory, 256, 256));
+    auto kernel = kernel_factory.getKernel("computeCoresSlm16x16", st);
+    DAAL_CHECK_STATUS_VAR(st);
+
+    std::cout << "Kernel obtained" << std::endl;
+    DAAL_ASSERT_UNIVERSAL_BUFFER(data, algorithmFPType, nRows * nFeatures);
+    DAAL_ASSERT_UNIVERSAL_BUFFER(_weights, algorithmFPType, _useWeights ? nRows : 1);
+    DAAL_ASSERT_UNIVERSAL_BUFFER(_isCore, int, nRows);
+
+    KernelArguments args(6, st);
+    DAAL_CHECK_STATUS_VAR(st);
+    args.set(0, static_cast<int32_t>(nRows));
+    args.set(1, static_cast<int32_t>(nFeatures));
+    args.set(2, nNbrs);
+    args.set(3, eps);
+    args.set(4, data, AccessModeIds::read);
+    args.set(5, _isCore, AccessModeIds::write);
+
+    const uint32_t rowBlocks = nRows /  16 + (int)((bool)(nRows % 16));
+    std::cout << "Size set: " << rowBlocks << std::endl;
+    KernelRange localRange(1, 256);
+    KernelRange globalRange(rowBlocks, 256);
 
     KernelNDRange range(2);
     range.global(globalRange, st);
@@ -513,6 +611,7 @@ Status DBSCANBatchKernelUCAPI<algorithmFPType>::buildProgramSlm(ClKernelFactoryI
     const auto fptypeName   = services::internal::sycl::getKeyFPType<algorithmFPType>();
 
     auto buildOptions = fptypeName;
+    std::cout << "xSize: " << xSize << "; ySize: " << ySize << std::endl;
     buildOptions.add(getBuildOptions(xSize, ySize));
 
     services::String cachekey("__daal_algorithms_dbscan_block_");
@@ -536,6 +635,7 @@ services::String DBSCANBatchKernelUCAPI<algorithmFPType>::getBuildOptions(uint32
     buildOptions.add(" -D__Y_SIZE__=");
     daal::services::daal_int_to_string(buffer, DAAL_MAX_STRING_SIZE, ySize);
     buildOptions.add(buffer);
+    std::cout << "buildOptions: " << buildOptions.c_str() << std::endl;
     return buildOptions;
 }
 
