@@ -411,7 +411,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm2(const Uni
                                                                    algorithmFPType eps)
 {
     services::Status st;
-    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm);
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm2);
 
     const int slmFpSize = (1024 * 64  - 32 * sizeof(int)) / sizeof(algorithmFPType) / 2;
     int blockSize = slmFpSize / nFeatures;
@@ -457,7 +457,7 @@ services::Status DBSCANBatchKernelUCAPI<algorithmFPType>::getCoresSlm16x16(const
                                                                    algorithmFPType eps)
 {
     services::Status st;
-    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm);
+    DAAL_ITTNOTIFY_SCOPED_TASK(compute.getCoresSlm16x16);
 
     auto & context        = Environment::getInstance()->getDefaultExecutionContext();
     auto & kernel_factory = context.getClKernelFactory();
